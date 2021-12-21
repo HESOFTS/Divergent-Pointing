@@ -276,17 +276,21 @@ class Array:
             
             xb = self.calc_mean(proj[0])
             yb = self.calc_mean(proj[1])
-            xv = self.calc_mean("p_"+proj[0])
-            yv = self.calc_mean("p_"+proj[1])
+            xbv = self.calc_mean("p_"+proj[0])
+            ybv = self.calc_mean("p_"+proj[1])
+        
             
             for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
                 xx = tels[proj[0]]
                 yy = tels[proj[1]]
-        
+                xv = tels["p_"+proj[0]]
+                yv = tels["p_"+proj[1]]
+                
                 ax.scatter(xx, yy, color=color, label='group_{}'.format(i), **kwargs)
                 ax.quiver(xx, yy, xv, yv, color=color)
 
             ax.scatter(xb, yb, marker='+', label='barycenter', color="r")
+            ax.quiver(xb, yb, xbv, ybv, color="r")
             ax.set_xlabel("{} [m]".format(proj[0]))
             ax.set_ylabel("{} [m]".format(proj[1]))
 
