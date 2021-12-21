@@ -2,9 +2,9 @@ from ..const import CONFIG_DIR
 from .telescope import Telescope, Array
 import astropy.units as u
 
-def LoadLayout(file="layout-3AL4M15-5.txt", tel_id=-1):
+def LoadLayout(file, tel_id=-1):
 
-    with open(CONFIG_DIR+file, "r") as f:
+    with open(file, "r") as f:
         
         tels = []
         for line in f:  
