@@ -15,8 +15,6 @@ def display_array_pointing_in_sky(array):
     pass
 
 
-
-
 def sky_fov(telescope, ax=None):
     """
     Display the telescope FoV in the sky

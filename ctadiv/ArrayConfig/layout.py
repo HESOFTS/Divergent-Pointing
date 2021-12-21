@@ -2,7 +2,7 @@ from ..const import CONFIG_DIR
 from .telescope import Telescope, Array
 import astropy.units as u
 
-def LoadLayout(file, tel_id=-1):
+def LoadConfig(file, tel_id=-1):
 
     with open(file, "r") as f:
         

@@ -1,12 +1,14 @@
 import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+
 from astropy.table import Table
 import astropy.table as tab
-from .utils import deg2rad
+
+from .utils import deg2rad, CTA_INFO
 from . import pointing
 
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz, ICRS
 
 class Telescope:
 
@@ -24,12 +26,12 @@ class Telescope:
         self.id = Telescope._id
         self.table = self.make_table(deg=deg)
     
-    def __repr__(self):
-        return self.table.__repr__()
 
     def point_to_altaz(self, alt, az):
         self.alt = alt.to(u.rad)
         self.az = az.to(u.rad)
+        if self.az < 0:
+            self.az += 2*np.pi*u.rad
         self.update_table(["alt", "az", "pointing"])
 
     @property
@@ -70,11 +72,11 @@ class Telescope:
 
     def make_table(self, deg=False):
         properties = [[self.id, self.x.value, self.y.value, self.z.value, self.focal, 
-                       self.alt.value, self.az.value, self.zenith.value, 
+                       self.az.value, self.alt.value,  self.zenith.value, 
                        self.fov.value, *tuple(self.pointing_vector),
                        ]]
         
-        label = ["id", "x", "y", "z", "focal", "alt", "az", "zn", "fov", "p_x", "p_y", "p_z"]
+        label = ["id", "x", "y", "z", "focal", "az", "alt", "zn", "fov", "p_x", "p_y", "p_z"]
         units = ["", u.m, u.m, u.m, u.m, u.rad, u.rad, u.rad, u.rad**2, "", "", ""]
         dtype = [np.int] + [np.float for i in range(len(units)-1)]
         table = Table(np.asarray(properties, dtype="object"), names=label, units=units, dtype=dtype)
@@ -83,7 +85,7 @@ class Telescope:
             table[col].info.format = '{:.3f}'
         
         if deg:
-            table =deg2rad(table, deg=deg)
+            table = deg2rad(table, deg=deg)
             return table
         else:
             return table
@@ -104,13 +106,14 @@ class Telescope:
 
 class Array:
 
-    def __init__(self, telescope_list):
+    def __init__(self, telescope_list, frame=None, **kwargs):
         
         self.telescopes = telescope_list
-        self.__create_table__()
+        
+        if frame == None:
+            self._frame = CTA_INFO(verbose=False, **kwargs)
 
-    def __repr__(self):
-        return self.table.__repr__()
+        self.__create_table__()
 
     def __create_table__(self):
         table = []
@@ -119,13 +122,20 @@ class Array:
         
         self.table = tab.vstack(table)
 
-        self.table.add_column(self.distance2tel, name="d_tel")
+        self.table.add_column(self.dist2tel, name="d_tel")
         self.table["d_tel"].unit = u.m
         self.table["d_tel"].info.format = "{:.2f}"
+
+        self._pointing_coord = SkyCoord(alt=self.table["alt"], az=self.table["az"], frame=self.frame.altaz, unit=self.table["alt"].unit)
 
     def convert_unit(self, deg=True):
         self.table = deg2rad(self.table, deg)
         return self.table
+
+    @property
+    def frame(self):
+        return self._frame
+    
     
     @property
     def positions_array(self):
@@ -139,17 +149,6 @@ class Array:
         return np.array([tel.position for tel in self.telescopes])
 
     @property
-    def positions_table(self):
-        """
-        all telescopes positions as a table
-
-        Returns
-        -------
-        astropy.table
-        """
-        return self.table["x", "y", "z"]
-        
-    @property
     def pointing_vectors(self):
         """
         all telescopes pointing vectors as an array
@@ -160,6 +159,19 @@ class Array:
         """
         return np.array([tel.pointing_vector for tel in self.telescopes])
         
+
+    @property
+    def positions_table(self):
+        """
+        all telescopes positions as a table
+
+        Returns
+        -------
+        astropy.table
+        """
+        return self.table["x", "y", "z"]
+        
+    
     @property        
     def pointing_table(self):
         """
@@ -169,21 +181,42 @@ class Array:
         -------
         astropy.table
         """
-        
         return self.table["p_x", "p_y", "p_z"]
     
     @property
     def barycenter(self):
-        return self.positions_array.mean(axis=0)
+        return np.array(self.calc_mean(["x", "y", "z"]))
 
     @property
-    def distance2tel(self):
-        return np.sqrt(np.sum((self.positions_array - self.barycenter)**2, axis=1))
+    def dist2tel(self):
+        dist = np.zeros(self.table.__len__())
+        for i, axis in enumerate(["x", "y", "z"]):
+            dist += (self.table[axis] - self.barycenter[i])**2.
+        dist = np.sqrt(dist)
+        return dist
+        #return np.sqrt(np.sum((self.positions_array - self.barycenter)**2, axis=1))
 
-    def calc_mean(self, columns, table=None):
+    def pointing_coord(self, icrs=False):
+        if icrs:
+            return self._pointing_coord.transform_to(ICRS())
+        else:
+            return self._pointing_coord
 
-        if table == None:
-            table = self.table
+    def calc_mean(self, columns):
+        """
+        Calculate a mean value of columns
+
+        Parameters
+        ----------
+        columns: str or array
+            names of columns
+
+        Returns
+        -------
+        np.float
+        """
+
+        table = self.table
 
         if np.size(columns) == 1:
             columns = [columns]
@@ -216,6 +249,8 @@ class Array:
         if type(az_mean) != u.Quantity:
             print("[Warning] The unit of the input az is assumed to be 'deg'")
             az_mean = az_mean*u.deg
+            if az_mean.value < 0:
+                az_mean += 360*u.deg
 
         if div > 1 or div < 0:
             print("[Error] The div value should be between 0 and 1.")
@@ -229,7 +264,6 @@ class Array:
                 tel.point_to_altaz(alt_tel*u.rad, az_tel*u.rad)
         
         self.__create_table__()
-
 
     def display(self, projection=None, ax=None, group=False, **kwargs):
         """
@@ -336,112 +370,4 @@ class Array:
             ax.set_zlabel('z [m]')
             
         return ax
-
-
-    def _display_2d(self, projection='xy', ax=None, **kwargs):
-        """
-        Display the array
-
-        Parameters
-        ----------
-        projection: str
-            'xy', 'xz' or 'yz'
-        ax: `matplotlib.pyplot.axes`
-        kwargs: args for `pyplot.scatter`
-
-        Returns
-        -------
-        ax: `matplotlib.pyplot.axes`
-        """
-        ax = plt.gca() if ax is None else ax
-        if 'color' not in kwargs:
-            kwargs['color'] = 'black'
-
-        if projection=='xy':
-            xx = self.positions_array[:, 1]
-            yy = self.positions_array[:, 0]
-            xb = self.barycenter[1]
-            yb = self.barycenter[0]
-            xv = self.pointing_vectors[:, 1]
-            yv = self.pointing_vectors[:, 0]
-            xlabel = 'y [m]'
-            ylabel = 'x [m]'
-
-        elif projection=='xz':
-            xx = self.positions_array[:, 0]
-            yy = self.positions_array[:, 2]
-            xb = self.barycenter[0]
-            yb = self.barycenter[2]
-            xv = self.pointing_vectors[:, 0]
-            yv = self.pointing_vectors[:, 2]
-            xlabel = 'x [m]'
-            ylabel = 'z [m]'
-
-        elif projection=='yz':
-            xx = self.positions_array[:, 1]
-            yy = self.positions_array[:, 2]
-            xb = self.barycenter[1]
-            yb = self.barycenter[2]
-            xv = self.pointing_vectors[:, 1]
-            yv = self.pointing_vectors[:, 2]
-            xlabel = 'y [m]'
-            ylabel = 'z [m]'
-
-        else:
-            breakpoint()
-
-        scale = np.max([xx, yy]) / 10.
-
-        ax.scatter(xx, yy, **kwargs, label='telescopes')
-        ax.scatter(xb, yb, marker='+', label='barycenter')
-        ax.quiver(xx, yy, xv, yv,
-                  color=kwargs['color'],
-                  scale=scale,
-                  )
-
-        ax.set_ylabel(ylabel)
-        ax.set_xlabel(xlabel)
-        ax.grid('on')
-        ax.axis('equal')
-        xlim = ax.get_xlim()
-        ylim = ax.get_ylim()
-        ax.set_xlim(xlim[0] - 0.25 * np.abs(xlim[0]), xlim[1] + 0.25 * np.abs(xlim[1]))
-        ax.set_ylim(ylim[0] - 0.25 * np.abs(ylim[0]), ylim[1] + 0.25 * np.abs(ylim[1]))
-        return ax
-
-    def _display_3d(self):
-        #TODO: fix pointing quiver length issue
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-
-        X = self.positions_array[:, 0]
-        Y = self.positions_array[:, 1]
-        Z = self.positions_array[:, 2]
-        max_range = np.array([X.max() - X.min(), Y.max() - Y.min(), Z.max() - Z.min()]).max()
-        scale = 1
-        Xb = scale * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + scale * (X.max() + X.min())
-        Yb = scale * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + scale * (Y.max() + Y.min())
-        Zb = scale * max_range * np.mgrid[-0.01:2:2, -0.01:2:2, -0.01:2:2][2].flatten() + scale * (Z.max() + Z.min())
-        # Comment or uncomment following both lines to test the fake bounding box:
-        for xb, yb, zb in zip(Xb, Yb, Zb):
-            ax.plot([xb], [yb], [zb], 'w')
-
-        ax.quiver(X,
-                  Y,
-                  Z,
-                  self.pointing_vectors[:, 0],
-                  self.pointing_vectors[:, 1],
-                  self.pointing_vectors[:, 2],
-                  color='black',
-                  length=max_range,
-                  )
-
-        ax.set_xlabel('x [m]')
-        ax.set_ylabel('y [m]')
-        ax.set_zlabel('z [m]')
-        # ax.axis('equal')
-
-        return ax
-
-
 

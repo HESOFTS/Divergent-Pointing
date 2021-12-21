@@ -10,8 +10,6 @@ Alt is taken from ground (towards Z) and between -90 and 90 degrees
 
 import numpy as np
 import astropy.units as u
-# import matplotlib.pyplot as plt
-
 
 def alt_az_to_vector(alt, az):
     """
