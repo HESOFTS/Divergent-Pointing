@@ -13,15 +13,25 @@ from . import utils
 def display_1d(table, proj, group=False, ax=None,  **kwargs):
     
     tel_group, color = utils.group_table(table, group)
-
+    xb = utils.calc_mean(table, proj[0])
+    
     ax = plt.gca() if ax is None else ax
 
     for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
-        for val in tels[proj[0]]:
-            ax.axvline(val, color=color, label='group_{}'.format(i), **kwargs)
+        
+        if group:
+            label = 'group_{}'.format(i)
+        else:
+            label = '_nolegend_'
 
+        for val in tels[proj[0]]:
+            ax.axvline(val, color=color, label=label, **kwargs)
+            label='_nolegend_'
+
+    ax.axvline(xb, color="r", label='barycenter', **kwargs)
     ax.set_xlabel("{} [m]".format(proj[0]))
     ax.set_yticks([0, 1])
+    ax.legend(frameon=False)
     return ax
 
 def display_2d(table, proj, group=False, ax=None, **kwargs):
@@ -44,7 +54,12 @@ def display_2d(table, proj, group=False, ax=None, **kwargs):
         xv = tels["p_"+proj[0]]
         yv = tels["p_"+proj[1]]
         
-        ax.scatter(xx, yy, color=color, label='group_{}'.format(i), **kwargs)
+        if group:
+            label = 'group_{}'.format(i)
+        else:
+            label = '_nolegend_'
+
+        ax.scatter(xx, yy, color=color, label=label, **kwargs)
         ax.quiver(xx, yy, xv, yv, color=color)
 
     ax.scatter(xb, yb, marker='+', label='barycenter', color="r")
@@ -72,7 +87,6 @@ def display_3d(table, proj, group=False, ax=None, **kwargs):
     max_range = []
     for axis in ["x", "y", "z"]:
         max_range.append(table[axis].max() - table[axis].min())
-
     max_range = max(max_range)
 
     for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
@@ -80,22 +94,43 @@ def display_3d(table, proj, group=False, ax=None, **kwargs):
         yy = tels["y"]
         zz = tels["z"]
 
+        if group:
+            label = 'group_{}'.format(i)
+        else:
+            label = '_nolegend_'
+
+        ax.quiver(xx, yy, zz, 
+                tels["p_x"], tels["p_y"], tels["p_z"],
+                color=color,
+                length=max_range,
+                label=label,
+                )
+
         Xb = scale * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + scale * (xx.max() + xx.min())
         Yb = scale * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + scale * (yy.max() + yy.min())
         Zb = scale * max_range * np.mgrid[-0.01:2:2, -0.01:2:2, -0.01:2:2][2].flatten() + scale * (zz.max() + zz.min())
         
         for xb, yb, zb in zip(Xb, Yb, Zb):
             ax.plot([xb], [yb], [zb], 'w')
-            ax.quiver(xx, yy, zz, 
-                    tels["p_x"], tels["p_y"], tels["p_z"],
-                    color=color,
-                    length=max_range,
-                    label='group_{}'.format(i),
-                    )
+        
+    xx = utils.calc_mean(table, proj[0])
+    yy = utils.calc_mean(table, proj[1])
+    zz = utils.calc_mean(table, proj[2])
+    xbv = utils.calc_mean(table, "p_"+proj[0])
+    ybv = utils.calc_mean(table, "p_"+proj[1])
+    zbv = utils.calc_mean(table, "p_"+proj[2])
+
+    ax.quiver(xx, yy, zz, 
+            xbv, ybv, zbv,
+            color="r",
+            length=max_range,
+            label='barycenter',
+            )
      
     ax.set_xlabel('x [m]')
     ax.set_ylabel('y [m]')
     ax.set_zlabel('z [m]')
+    ax.legend(frameon=False)
     
 
 def display_array_pointing_in_sky(array):
