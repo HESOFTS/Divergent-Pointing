@@ -8,6 +8,95 @@ from matplotlib.projections import PolarAxes
 from matplotlib.transforms import Affine2D
 import astropy.units as u
 
+from . import utils
+
+def display_1d(table, proj, group=False, ax=None,  **kwargs):
+    
+    tel_group, color = utils.group_table(table, group)
+
+    ax = plt.gca() if ax is None else ax
+
+    for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
+        for val in tels[proj[0]]:
+            ax.axvline(val, color=color, label='group_{}'.format(i), **kwargs)
+
+    ax.set_xlabel("{} [m]".format(proj[0]))
+    ax.set_yticks([0, 1])
+    return ax
+
+def display_2d(table, proj, group=False, ax=None, **kwargs):
+    
+    tel_group, color = utils.group_table(table, group)
+
+    ax = plt.gca() if ax is None else ax
+            
+    scale = 1
+    
+    xb = utils.calc_mean(table, proj[0])
+    yb = utils.calc_mean(table, proj[1])
+    xbv = utils.calc_mean(table, "p_"+proj[0])
+    ybv = utils.calc_mean(table, "p_"+proj[1])
+
+    
+    for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
+        xx = tels[proj[0]]
+        yy = tels[proj[1]]
+        xv = tels["p_"+proj[0]]
+        yv = tels["p_"+proj[1]]
+        
+        ax.scatter(xx, yy, color=color, label='group_{}'.format(i), **kwargs)
+        ax.quiver(xx, yy, xv, yv, color=color)
+
+    ax.scatter(xb, yb, marker='+', label='barycenter', color="r")
+    ax.quiver(xb, yb, xbv, ybv, color="r")
+    ax.set_xlabel("{} [m]".format(proj[0]))
+    ax.set_ylabel("{} [m]".format(proj[1]))
+
+    ax.grid('on')
+    ax.axis('equal')
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    ax.set_xlim(xlim[0] - 0.25 * np.abs(xlim[0]), xlim[1] + 0.25 * np.abs(xlim[1]))
+    ax.set_ylim(ylim[0] - 0.25 * np.abs(ylim[0]), ylim[1] + 0.25 * np.abs(ylim[1]))
+    ax.legend(frameon=False)
+    return ax
+
+def display_3d(table, proj, group=False, ax=None, **kwargs):
+
+    tel_group, color = utils.group_table(table, group)
+    
+    ax = plt.figure(figsize=(8, 8)).add_subplot(111, projection='3d')
+
+    scale = 1
+
+    max_range = []
+    for axis in ["x", "y", "z"]:
+        max_range.append(table[axis].max() - table[axis].min())
+
+    max_range = max(max_range)
+
+    for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
+        xx = tels["x"]
+        yy = tels["y"]
+        zz = tels["z"]
+
+        Xb = scale * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + scale * (xx.max() + xx.min())
+        Yb = scale * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + scale * (yy.max() + yy.min())
+        Zb = scale * max_range * np.mgrid[-0.01:2:2, -0.01:2:2, -0.01:2:2][2].flatten() + scale * (zz.max() + zz.min())
+        
+        for xb, yb, zb in zip(Xb, Yb, Zb):
+            ax.plot([xb], [yb], [zb], 'w')
+            ax.quiver(xx, yy, zz, 
+                    tels["p_x"], tels["p_y"], tels["p_z"],
+                    color=color,
+                    length=max_range,
+                    label='group_{}'.format(i),
+                    )
+     
+    ax.set_xlabel('x [m]')
+    ax.set_ylabel('y [m]')
+    ax.set_zlabel('z [m]')
+    
 
 def display_array_pointing_in_sky(array):
     #TODO: take an array class and plot the pointings FoV in the sky

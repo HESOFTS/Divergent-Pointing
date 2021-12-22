@@ -4,6 +4,6 @@ from .telescope import *
 
 from .layout import *
 
-from .utils import CTA_INFO
+from . import utils
 
 __version__ = 0.1

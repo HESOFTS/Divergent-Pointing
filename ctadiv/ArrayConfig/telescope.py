@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 from astropy.table import Table
 import astropy.table as tab
 
-from .utils import deg2rad, CTA_INFO
+from . import utils as utils
+from . import visualization as visual
 from . import pointing
 
 from astropy.coordinates import SkyCoord, EarthLocation, AltAz, ICRS
@@ -85,7 +86,7 @@ class Telescope:
             table[col].info.format = '{:.3f}'
         
         if deg:
-            table = deg2rad(table, deg=deg)
+            table = utils.deg2rad(table, deg=deg)
             return table
         else:
             return table
@@ -101,7 +102,7 @@ class Telescope:
                 self.table[val] = getattr(self, val)
             
     def convert_unit(self, deg=True):
-        self.table = deg2rad(self.table, deg)
+        self.table = utils.deg2rad(self.table, deg)
         return self.table
 
 class Array:
@@ -111,7 +112,7 @@ class Array:
         self.telescopes = telescope_list
         
         if frame == None:
-            self._frame = CTA_INFO(verbose=False, **kwargs)
+            self._frame = utils.CTA_INFO(verbose=False, **kwargs)
 
         self.__create_table__()
 
@@ -129,7 +130,7 @@ class Array:
         self._pointing_coord = SkyCoord(alt=self.table["alt"], az=self.table["az"], frame=self.frame.altaz, unit=self.table["alt"].unit)
 
     def convert_unit(self, deg=True):
-        self.table = deg2rad(self.table, deg)
+        self.table = utils.deg2rad(self.table, deg)
         return self.table
 
     @property
@@ -185,7 +186,7 @@ class Array:
     
     @property
     def barycenter(self):
-        return np.array(self.calc_mean(["x", "y", "z"]))
+        return np.array(utils.calc_mean(self.table, ["x", "y", "z"]))
 
     @property
     def dist2tel(self):
@@ -202,32 +203,6 @@ class Array:
         else:
             return self._pointing_coord
 
-    def calc_mean(self, columns):
-        """
-        Calculate a mean value of columns
-
-        Parameters
-        ----------
-        columns: str or array
-            names of columns
-
-        Returns
-        -------
-        np.float
-        """
-
-        table = self.table
-
-        if np.size(columns) == 1:
-            columns = [columns]
-        
-        mean = []
-        for column in columns:
-            if column in ["p_x", "p_y", "p_z"]:
-                mean.append(np.average(table[column], weights=table["d_tel"]))
-            else:
-                mean.append(np.mean(table[column]))
-        return mean
 
     def divergent_pointing(self, div, alt_mean, az_mean):
         """
@@ -274,7 +249,7 @@ class Array:
         projection: str
             any combination of 'x', 'y', and 'z'
         ax: `matplotlib.pyplot.axes`
-        kwargs: args for `pyplot.scatter`, `pyplot.scatter`
+        kwargs: args for `pyplot.scatter` or `pyplot.scatter`
 
         Returns
         -------
@@ -285,89 +260,12 @@ class Array:
             if axis in projection:
                 proj.append(axis)
 
-        if group:
-            tel_group = self.table.group_by("focal")
-            color = ["tab:blue", "tab:orange", "tab:green"]
-        else:
-            tel_group = self.table
-            color = ["black"]
-
         if len(proj) == 1:
-            ax = plt.gca() if ax is None else ax
-
-            for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
-                for val in tels[proj[0]]:
-                    ax.axvline(val, color=color, label='group_{}'.format(i), **kwargs)
-
-            ax.set_xlabel("{} [m]".format(proj[0]))
-            ax.set_yticks([0, 1])
-        
+            ax = visual.display_1d(self.table, proj, group=group, ax=ax, **kwargs)
         elif len(proj) == 2:
-            
-            ax = plt.gca() if ax is None else ax
-            
-            scale = 1
-            
-            xb = self.calc_mean(proj[0])
-            yb = self.calc_mean(proj[1])
-            xbv = self.calc_mean("p_"+proj[0])
-            ybv = self.calc_mean("p_"+proj[1])
-        
-            
-            for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
-                xx = tels[proj[0]]
-                yy = tels[proj[1]]
-                xv = tels["p_"+proj[0]]
-                yv = tels["p_"+proj[1]]
-                
-                ax.scatter(xx, yy, color=color, label='group_{}'.format(i), **kwargs)
-                ax.quiver(xx, yy, xv, yv, color=color)
-
-            ax.scatter(xb, yb, marker='+', label='barycenter', color="r")
-            ax.quiver(xb, yb, xbv, ybv, color="r")
-            ax.set_xlabel("{} [m]".format(proj[0]))
-            ax.set_ylabel("{} [m]".format(proj[1]))
-
-            ax.grid('on')
-            ax.axis('equal')
-            xlim = ax.get_xlim()
-            ylim = ax.get_ylim()
-            ax.set_xlim(xlim[0] - 0.25 * np.abs(xlim[0]), xlim[1] + 0.25 * np.abs(xlim[1]))
-            ax.set_ylim(ylim[0] - 0.25 * np.abs(ylim[0]), ylim[1] + 0.25 * np.abs(ylim[1]))
-            ax.legend(frameon=False)
-
+            ax = visual.display_2d(self.table, proj, group=group, ax=ax, **kwargs)
         else:
-            ax = plt.figure(figsize=(8, 8)).add_subplot(111, projection='3d')
-
-            scale = 1
-
-            max_range = []
-            for axis in ["x", "y", "z"]:
-                max_range.append(self.table[axis].max() - self.table[axis].min())
-
-            max_range = max(max_range)
-
-            for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
-                xx = tels["x"]
-                yy = tels["y"]
-                zz = tels["z"]
-
-                Xb = scale * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + scale * (xx.max() + xx.min())
-                Yb = scale * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + scale * (yy.max() + yy.min())
-                Zb = scale * max_range * np.mgrid[-0.01:2:2, -0.01:2:2, -0.01:2:2][2].flatten() + scale * (zz.max() + zz.min())
-                
-                for xb, yb, zb in zip(Xb, Yb, Zb):
-                    ax.plot([xb], [yb], [zb], 'w')
-                    ax.quiver(xx, yy, zz, 
-                            tels["p_x"], tels["p_y"], tels["p_z"],
-                            color=color,
-                            length=max_range,
-                            label='group_{}'.format(i),
-                            )
-             
-            ax.set_xlabel('x [m]')
-            ax.set_ylabel('y [m]')
-            ax.set_zlabel('z [m]')
-            
+            ax = visual.display_3d(self.table, proj, group=group, ax=ax, **kwargs)
+        
         return ax
 
