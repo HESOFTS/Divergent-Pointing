@@ -1,17 +1,23 @@
 from ..const import CONFIG_DIR
 from .telescope import Telescope, Array
 import astropy.units as u
+import numpy as np
 
-def LoadConfig(file, tel_id=-1):
+from . import utils
+
+def LoadConfig(file, tel_id=-1, radius="deg"):
 
     with open(file, "r") as f:
         
         tels = []
-        for line in f:  
-            #split the string on whitespace, return a list of numbers as strings
-            coord_str = line.split()
-            coord_str[0], coord_str[1], coord_str[2] = float(coord_str[0]), float(coord_str[1]), float(coord_str[2]) 
-            coord = [x*u.m for x in coord_str]
+        for line in f.readlines():
+            line = np.asarray(line.split()).astype("float")
+
+            if radius=="deg":
+                line[4] = utils.convert_radius(line[4]*u.deg, line[3], toDeg=False)
+            
+            coord = [x*u.m for x in line]
+
             tel = Telescope(coord[0],coord[1],coord[2],coord[3],coord[4])
             tels.append(tel)
 

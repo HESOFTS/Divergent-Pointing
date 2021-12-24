@@ -1,4 +1,5 @@
 import numpy as np
+
 import astropy.units as u
 
 from astropy.coordinates import SkyCoord, EarthLocation, AltAz, ICRS
@@ -73,22 +74,42 @@ def calc_mean(table, columns):
             mean.append(np.mean(table[column]))
     return mean
     
-def deg2rad(table, deg=False):
-    if deg:
-        table["az"]=table["az"].to(u.deg)
-        table["alt"]=table["alt"].to(u.deg)
-        table["zn"]=table["zn"].to(u.deg)
-        table["fov"]=table["fov"].to(u.deg**2)
+def deg2rad(table, toDeg=False):
+    if toDeg:
+        for par in ["az", "alt", "zn"]:
+            table[par] = table[par].to(u.deg)
+            table[par].info.format = '{:.3f}'
+
+        table["radius"] = convert_radius(table["radius"], table["focal"], toDeg=toDeg)
+        table["radius"].info.format = '{:.3f}'
+
+        table["fov"]    = table["fov"].to(u.deg**2)
+        table["fov"].info.format = '{:.3f}'
     else:
-        table["az"]=table["az"].to(u.rad)
-        table["alt"]=table["alt"].to(u.rad)
-        table["zn"]=table["zn"].to(u.rad)
-        table["fov"]=table["fov"].to(u.rad**2)
+        for par in ["az", "alt", "zn"]:
+            table[par] = table[par].to(u.rad)
+            table[par].info.format = '{:.3f}'
+        
+        table["radius"] = convert_radius(table["radius"], table["focal"], toDeg=toDeg)
+        table["radius"].info.format = '{:.3f}'
+        
+        table["fov"]    = table["fov"].to(u.rad**2)
+        table["fov"].info.format = '{:.3f}'
     return table
+
+def convert_radius(radius, focal, toDeg=False):
+    if toDeg and radius.unit == u.m:
+        temp = np.arctan(np.asarray(radius/focal))
+        temp = temp*u.rad
+        radius = temp.to(u.deg)
+    elif not(toDeg) and radius.unit == u.deg:        
+        temp = radius.to(u.rad)
+        radius= np.tan(temp.value)*focal
+    return radius
 
 def group_table(table, group):
     if group:
-        tel_group = table.group_by("focal")
+        tel_group = table.group_by("radius")
         color = ["tab:blue", "tab:orange", "tab:green"]
     else:
         tel_group = table
