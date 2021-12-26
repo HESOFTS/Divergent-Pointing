@@ -273,17 +273,12 @@ class Array:
         -------
         ax: `matplotlib.pyplot.axes`
         """
-        if group:
-            tel_group, labels = self.group_by(group)
-        else:
-            tel_group = self.table.group_by(np.zeros(self.size_of_array))
-            labels = ["_nolegend_"]
+        tel_group, labels = self.group_by(group)
 
         if skymap:
-            for i, [table,label] in enumerate(zip(tel_group.groups, labels)):
+            for i, [table, label] in enumerate(zip(tel_group.groups, labels)):
             
-                radec = pointing.pointing_coord(table, self.frame, icrs=True)
-                ax = visual.display_skymap(radec, self.frame,  
+                ax = visual.display_skymap(table, self.frame,  
                                     label=labels[i], ax=ax)
             return ax
         else:

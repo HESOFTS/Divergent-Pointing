@@ -10,11 +10,8 @@ from astroplan import Observer
 class CTA_INFO:
     def __init__(self, location='Roque de los Muchachos', t_obs='2013-11-01T03:00', observer='Roque', verbose=True):
         self._location = location
-        self._loc = EarthLocation.of_site(self.location)
-
         self._observer = Observer(location=self.loc, name=observer)
         self._t_obs = Time(t_obs)
-        self._altaz = AltAz(location=self.loc, obstime=self._t_obs)
         if verbose:
             print("Observer        : ", self.observer.name)
             print("Location        : ", self.location, self.loc, self.loc.to(u.km))
@@ -28,7 +25,7 @@ class CTA_INFO:
 
     @property
     def loc(self):
-        return self._loc
+        return EarthLocation.of_site(self.location)
     
     @property
     def t_obs(self):
@@ -40,7 +37,7 @@ class CTA_INFO:
     
     @property
     def altaz(self):
-        return self._altaz
+        return AltAz(location=self.loc, obstime=self.t_obs)
 
     @property
     def location(self):

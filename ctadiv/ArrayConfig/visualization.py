@@ -16,6 +16,8 @@ from astroplan.plots import plot_sky
 from astroplan import FixedTarget
 
 from . import utils
+from ..const import COLORS
+from . import pointing
 
 import mpl_toolkits.axisartist.angle_helper as angle_helper
 from mpl_toolkits.axisartist import SubplotHost, ParasiteAxesAuxTrans
@@ -29,7 +31,7 @@ from astropy.visualization.wcsaxes import SphericalCircle
 from descartes import PolygonPatch
 from shapely.ops import unary_union, polygonize
 from shapely.geometry import mapping, LineString, Point
-from ..const import COLORS
+
 
 def display_1d(table, proj, ax=None, labels=None, **kwargs):
     
@@ -54,17 +56,10 @@ def display_2d(table, proj, ax=None, labels=None, **kwargs):
     
     if ax is None:
         ax = plt.figure().add_subplot(111)
-        block=True
-    else:
-        block=False
             
     scale = 1
     
-    xb = utils.calc_mean(table, proj[0])
-    yb = utils.calc_mean(table, proj[1])
-    xbv = utils.calc_mean(table, "p_"+proj[0])
-    ybv = utils.calc_mean(table, "p_"+proj[1])
-
+    b_output = utils.calc_mean(table, [proj[0], proj[1], "p_"+proj[0], "p_"+proj[1]])
     
     for i, [tels, label] in enumerate(zip(table.groups, labels)):
         xx = tels[proj[0]]
@@ -78,8 +73,9 @@ def display_2d(table, proj, ax=None, labels=None, **kwargs):
 
         for i, x, y in zip(ids, xx, yy):
             ax.annotate(i, (x,y))
-    ax.scatter(xb, yb, marker='+', label='barycenter', color="r")
-    ax.quiver(xb, yb, xbv, ybv, color="r")
+    
+    ax.scatter(b_output[0], b_output[1], marker='+', label='barycenter', color="r")
+    ax.quiver(*b_output, color="r")
     ax.set_xlabel("{} [m]".format(proj[0]))
     ax.set_ylabel("{} [m]".format(proj[1]))
 
@@ -143,11 +139,71 @@ def display_3d(table, proj, ax=None, labels=None, **kwargs):
     ax.legend(frameon=False)
     
     return ax
+
+def display_barycenter(table, proj, ax=None, labels=None, fig=None, **kwargs):
+
+    if fig == None:
+        fig = plt.figure() 
+
+    if ax is None:
+        ax = fig.add_subplot(111) 
+            
+    scale = 1
     
-def display_skymap(radec, frame, ax=None, **kwargs):
+    for i, (tab, label) in enumerate(zip(table.groups, labels)):
+        output = utils.calc_mean(tab, [proj[0], proj[1], "p_"+proj[0], "p_"+proj[1]])
+        s = ax.scatter(output[0], output[1], color=COLORS(i),)
+        ax.quiver(*output, color=s.get_facecolor())
+
+        ax.annotate(label, (output[0],output[1]))
+
+    ax.set_xlabel("{} [m]".format(proj[0]))
+    ax.set_ylabel("{} [m]".format(proj[1]))
+
+    ax.grid('on')
+    ax.axis('equal')
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    ax.set_xlim(xlim[0] - 0.25 * np.abs(xlim[0]), xlim[1] + 0.25 * np.abs(xlim[1]))
+    ax.set_ylim(ylim[0] - 0.25 * np.abs(ylim[0]), ylim[1] + 0.25 * np.abs(ylim[1]))
+    ax.legend(frameon=False)
+
+    return ax
+
+def interactive_barycenter(array, proj="xy", overwrite=True, group=False):
+
+    if overwrite:
+        new_array = array
+    else:
+        new_array = copy.deepcopy(array)
+    
+    fig = plt.figure()
+
+    def update(div=0, az=0, alt=0):
+
+        new_array.divergent_pointing(div, az_mean = az*u.deg, alt_mean = alt*u.deg)
+        new_array.convert_unit(toDeg=True)
+        plt.cla()
+        groupped_table, labels = new_array.group_by(group)
+        display_barycenter(groupped_table, proj, labels=labels, fig=fig)
+        fig.canvas.draw_idle()
+
+    div_s = widgets.FloatLogSlider(value=new_array.div, base=10, min=-4, max =0, step=0.2, description='Divergence')
+    az_s = widgets.FloatSlider(value=new_array.pointing["az"].value, min=0, max=360, step=0.01, description='Azumith [deg]')
+    alt_s = widgets.FloatSlider(value=new_array.pointing["alt"].value, min=0, max=90, step=0.01, description='Altitude [deg]')
+    
+    ui = widgets.HBox([div_s, alt_s, az_s])
+    out = widgets.interactive_output(update, {'div': div_s, 'az': az_s, 'alt': alt_s})
+    display(ui, out)
+
+    return new_array
+
+def display_skymap(table, frame, ax=None, **kwargs):
   
     ax = plt.figure().add_subplot(111, projection='polar') if ax is None else ax
 
+    radec = pointing.pointing_coord(table, frame, icrs=True)
+                
     point = SkyCoord(ra=radec.ra, dec=radec.dec)
 
     target = FixedTarget(coord=point, name="abc")
