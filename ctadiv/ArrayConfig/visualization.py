@@ -48,7 +48,7 @@ def display_1d(table, proj, ax=None, labels=None, **kwargs):
     ax.set_yticks([0, 1])
     ax.legend(frameon=False)
 
-    plt.show(block=False)
+    return ax
 
 def display_2d(table, proj, ax=None, labels=None, **kwargs):
     
@@ -91,7 +91,6 @@ def display_2d(table, proj, ax=None, labels=None, **kwargs):
     ax.set_ylim(ylim[0] - 0.25 * np.abs(ylim[0]), ylim[1] + 0.25 * np.abs(ylim[1]))
     ax.legend(frameon=False)
 
-    #plt.show(block=block)
     return ax
 
 def display_3d(table, proj, ax=None, labels=None, **kwargs):
@@ -142,7 +141,8 @@ def display_3d(table, proj, ax=None, labels=None, **kwargs):
     ax.set_ylabel('y [m]')
     ax.set_zlabel('z [m]')
     ax.legend(frameon=False)
-    plt.show(block=False)
+    
+    return ax
     
 def display_skymap(radec, frame, ax=None, **kwargs):
   
@@ -231,7 +231,7 @@ def skymap_polar(array, group=False, fig=None):
     ax1.legend()
     plt.show()
 
-def interactive_polar(array, overwrite=True, group=True):
+def interactive_polar(array, overwrite=True, group=False):
 
     if overwrite:
         new_array = array

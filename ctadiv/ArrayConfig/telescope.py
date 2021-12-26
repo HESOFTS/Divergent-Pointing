@@ -276,7 +276,7 @@ class Array:
         if group:
             tel_group, labels = self.group_by(group)
         else:
-            tel_group = self.table
+            tel_group = self.table.group_by(np.zeros(self.size_of_array))
             labels = ["_nolegend_"]
 
         if skymap:
@@ -320,9 +320,12 @@ class Array:
                 j+=1
 
             tel_group = self.table.group_by(np.asarray(groupping))
-        else:
+        elif group:
             tel_group = self.table.group_by("radius")
             labels = ["group_{}".format(i+1) for i in range(len(tel_group.groups))]
+        else:
+            tel_group = self.table.group_by(np.zeros(self.size_of_array))
+            labels = ["_nolegend_"]
         
         return (tel_group, labels)
 
