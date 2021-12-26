@@ -276,7 +276,7 @@ def multiplicity_plot(array, fig=None):
         for pol in polygons:
             if np.isclose(res.difference(pol).area, 0):
                 count_overlaps[-1] +=1
-    max_multiplicity = max(count_overlaps)
+    max_multiplicity = array.size_of_array
 
     cmap = plt.cm.get_cmap('rainbow')
     color_list = cmap(np.linspace(0, 1, max_multiplicity))
@@ -314,7 +314,7 @@ def multiplicity_plot(array, fig=None):
                                      cmap=cmap,
                                      boundaries = bounds,
                                      orientation='vertical',
-                                    label='Multiplicity')
+                                     label='Multiplicity')
     cb1.set_ticks(np.arange(max_multiplicity + 1) + 0.5)
     cb1.set_ticklabels(np.arange(max_multiplicity + 1) + 1)
 
