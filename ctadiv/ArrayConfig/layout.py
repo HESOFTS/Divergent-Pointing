@@ -5,7 +5,26 @@ import numpy as np
 
 from . import utils
 
-def LoadConfig(file, tel_id=-1, radius="deg"):
+def LoadConfig(file, tel_id=-1, radius="degrees"):
+    
+    """
+    Load the telescope configuration file
+    
+    Parameters
+    ----------
+    file: str 
+          the name of file
+    tel_id: int 
+            If you want to load only a single telescope,
+            you can set this parameter (defalut: load all)
+    radius: str
+            Define the unit of camera radius
+            either 'meters' or 'degrees'
+        
+    Returns
+    -------
+    class.Array
+    """
 
     with open(file, "r") as f:
         
@@ -13,7 +32,7 @@ def LoadConfig(file, tel_id=-1, radius="deg"):
         for line in f.readlines():
             line = np.asarray(line.split()).astype("float")
 
-            if radius=="deg":
+            if (radius!="meters"):
                 line[4] = utils.convert_radius(line[4]*u.deg, line[3], toDeg=False)
             
             coord = [x*u.m for x in line]
