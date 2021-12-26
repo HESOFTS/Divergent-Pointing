@@ -114,6 +114,7 @@ class Array:
     def __init__(self, telescope_list, frame=None, **kwargs):
         
         self.telescopes = telescope_list
+
         self._div = 0
         self._pointing = {"az":0*u.deg, "alt":0*u.deg}
 
@@ -137,6 +138,10 @@ class Array:
         self.table = utils.deg2rad(self.table, toDeg)
         if showTable:
             return self.table
+
+    @property
+    def size_of_array(self):
+        return self.table.__len__()
 
     @property
     def frame(self):
@@ -198,7 +203,7 @@ class Array:
 
     @property
     def dist2tel(self):
-        dist = np.zeros(self.table.__len__())
+        dist = np.zeros(self.size_of_array)
         for i, axis in enumerate(["x", "y", "z"]):
             dist += (self.table[axis] - self.barycenter[i])**2.
         dist = np.sqrt(dist)
@@ -268,20 +273,18 @@ class Array:
         -------
         ax: `matplotlib.pyplot.axes`
         """
-        
+        if group:
+            tel_group, labels = self.group_by(group)
+        else:
+            tel_group = self.table
+            labels = ["_nolegend_"]
 
         if skymap:
-            if group:
-                tel_group, color = utils.group_table(self.table, group)
-                
-                for i, [table, c] in enumerate(zip(tel_group.groups, color)):
-                
-                    radec = pointing.pointing_coord(table, self.frame, icrs=True)
-                    ax = visual.display_skymap(radec, self.frame,  
-                                        label="group_{}".format(i), ax=ax, color=c,)
-            else:
-                radec = pointing.pointing_coord(self.table, self.frame, icrs=True)
-                ax = visual.display_skymap(radec, self.frame, ax=ax)
+            for i, [table,label] in enumerate(zip(tel_group.groups, labels)):
+            
+                radec = pointing.pointing_coord(table, self.frame, icrs=True)
+                ax = visual.display_skymap(radec, self.frame,  
+                                    label=labels[i], ax=ax)
             return ax
         else:
             proj = []
@@ -290,11 +293,11 @@ class Array:
                     proj.append(axis)
 
         if len(proj) == 1:
-            ax = visual.display_1d(self.table, proj, group=group, ax=ax, **kwargs)
+            ax = visual.display_1d(tel_group, proj, ax=ax, labels=labels, **kwargs)
         elif len(proj) == 2:
-            ax = visual.display_2d(self.table, proj, group=group, ax=ax, **kwargs)
+            ax = visual.display_2d(tel_group, proj, ax=ax, labels=labels, **kwargs)
         else:
-            ax = visual.display_3d(self.table, proj, group=group, ax=ax, **kwargs)
+            ax = visual.display_3d(tel_group, proj, ax=ax, labels=labels, **kwargs)
         
         return ax
 
@@ -303,6 +306,25 @@ class Array:
 
     def multiplicity_plot(self, fig=None):
         return visual.multiplicity_plot(self, fig=fig)
+
+    def group_by(self, group = None):
+        
+        if type(group) == dict:
+            groupping = np.zeros(self.size_of_array)
+            labels = []
+            j = 1
+            for key in group.keys():
+                labels.append(key)
+                for i in group[key]:
+                    groupping[i-1] = j
+                j+=1
+
+            tel_group = self.table.group_by(np.asarray(groupping))
+        else:
+            tel_group = self.table.group_by("radius")
+            labels = ["group_{}".format(i+1) for i in range(len(tel_group.groups))]
+        
+        return (tel_group, labels)
 
     def export_cfg(self, filename=None):
         

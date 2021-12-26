@@ -72,7 +72,7 @@ def calc_mean(table, columns):
             mean.append(np.average(table[column], weights=table["d_tel"]))
         else:
             mean.append(np.mean(table[column]))
-    return mean
+    return tuple(mean)
     
 def deg2rad(table, toDeg=False):
     if toDeg:
@@ -107,11 +107,4 @@ def convert_radius(radius, focal, toDeg=False):
         radius= np.tan(temp.value)*focal
     return radius
 
-def group_table(table, group):
-    if group:
-        tel_group = table.group_by("radius")
-        color = ["tab:blue", "tab:orange", "tab:green"]
-    else:
-        tel_group = table
-        color = ["black"]
-    return tel_group, color
+

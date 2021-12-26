@@ -29,24 +29,18 @@ from astropy.visualization.wcsaxes import SphericalCircle
 from descartes import PolygonPatch
 from shapely.ops import unary_union, polygonize
 from shapely.geometry import mapping, LineString, Point
+from ..const import COLORS
 
-
-def display_1d(table, proj, group=False, ax=None,  **kwargs):
+def display_1d(table, proj, ax=None, labels=None, **kwargs):
     
-    tel_group, color = utils.group_table(table, group)
     xb = utils.calc_mean(table, proj[0])
     
     ax = plt.figure().add_subplot(111) if ax is None else ax
 
-    for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
-        
-        if group:
-            label = 'group_{}'.format(i)
-        else:
-            label = '_nolegend_'
-
+    for i, [tels, label] in enumerate(zip(table.groups, labels)):
+        c = COLORS(i)
         for val in tels[proj[0]]:
-            ax.axvline(val, color=color, label=label, **kwargs)
+            ax.axvline(val, label=label, color=c, **kwargs)
             label='_nolegend_'
 
     ax.axvline(xb, color="r", label='barycenter', **kwargs)
@@ -56,11 +50,13 @@ def display_1d(table, proj, group=False, ax=None,  **kwargs):
 
     plt.show(block=False)
 
-def display_2d(table, proj, group=False, ax=None, **kwargs):
+def display_2d(table, proj, ax=None, labels=None, **kwargs):
     
-    tel_group, color = utils.group_table(table, group)
-
-    ax = plt.figure().add_subplot(111) if ax is None else ax
+    if ax is None:
+        ax = plt.figure().add_subplot(111)
+        block=True
+    else:
+        block=False
             
     scale = 1
     
@@ -70,20 +66,15 @@ def display_2d(table, proj, group=False, ax=None, **kwargs):
     ybv = utils.calc_mean(table, "p_"+proj[1])
 
     
-    for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
+    for i, [tels, label] in enumerate(zip(table.groups, labels)):
         xx = tels[proj[0]]
         yy = tels[proj[1]]
         xv = tels["p_"+proj[0]]
         yv = tels["p_"+proj[1]]
         ids = tels["id"]
-        
-        if group:
-            label = 'group_{}'.format(i)
-        else:
-            label = '_nolegend_'
 
-        ax.scatter(xx, yy, color=color, label=label, **kwargs)
-        ax.quiver(xx, yy, xv, yv, color=color)
+        s = ax.scatter(xx, yy, label=label, **kwargs)
+        ax.quiver(xx, yy, xv, yv, color=s.get_facecolor())
 
         for i, x, y in zip(ids, xx, yy):
             ax.annotate(i, (x,y))
@@ -100,12 +91,11 @@ def display_2d(table, proj, group=False, ax=None, **kwargs):
     ax.set_ylim(ylim[0] - 0.25 * np.abs(ylim[0]), ylim[1] + 0.25 * np.abs(ylim[1]))
     ax.legend(frameon=False)
 
-    plt.show(block=False)
+    #plt.show(block=block)
+    return ax
 
-def display_3d(table, proj, group=False, ax=None, **kwargs):
+def display_3d(table, proj, ax=None, labels=None, **kwargs):
 
-    tel_group, color = utils.group_table(table, group)
-    
     ax = plt.figure().add_subplot(111, projection='3d')
 
     scale = 1
@@ -115,21 +105,16 @@ def display_3d(table, proj, group=False, ax=None, **kwargs):
         max_range.append(table[axis].max() - table[axis].min())
     max_range = max(max_range)
 
-    for i, [tels, color] in enumerate(zip(tel_group.groups, color)):
+    for i, [tels, label] in enumerate(zip(table.groups, labels)):
         xx = tels["x"]
         yy = tels["y"]
         zz = tels["z"]
-
-        if group:
-            label = 'group_{}'.format(i)
-        else:
-            label = '_nolegend_'
-
+        c = COLORS(i)
         ax.quiver(xx, yy, zz, 
                 tels["p_x"], tels["p_y"], tels["p_z"],
-                color=color,
                 length=max_range,
                 label=label,
+                color=c,
                 )
 
         Xb = scale * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + scale * (xx.max() + xx.min())
@@ -227,22 +212,23 @@ def skymap_polar(array, group=False, fig=None):
     ax1.parasites.append(ax2)
 
     array.convert_unit(toDeg=True)
-    tel_group, color = utils.group_table(array.table, group)
-    for tel_table, c in zip(tel_group.groups, color):
-        ax1.scatter(tel_table["az"], tel_table["alt"], c = c if c!="black" else "white", 
-            s=20, edgecolor="black" if c!="black" else "white", transform=ax2.transData, zorder=10)
+    tel_group, labels = array.group_by(group)
+    for tel_table, label in zip(tel_group.groups, labels):
+        s = ax1.scatter(tel_table["az"], tel_table["alt"], label=label,
+            s=20, edgecolor="black", transform=ax2.transData, zorder=10)
+        
         for tel in tel_table:
             r = SphericalCircle((tel["az"] * u.deg, tel["alt"] * u.deg), tel["radius"] * u.deg, 
-                                color=c, alpha=0.1, transform=ax2.transData)
+                                color=s.get_facecolor()[0], alpha=0.1, transform=ax2.transData)
             ax1.add_patch(r)
             ax2.annotate(tel_table["id"], (tel_table["az"], tel_table["alt"]), fontsize=12, xytext=(4, 4), 
-                color="black" if c!="black" else "white", textcoords='offset pixels', zorder=10)
+                color="black", textcoords='offset pixels', zorder=10)
         
 
     ax1.grid(True)
     ax1.set_xlabel("Azimuth [deg]", fontsize=20)
     ax1.set_ylabel("Altitude [deg]", fontsize=20)
-
+    ax1.legend()
     plt.show()
 
 def interactive_polar(array, overwrite=True, group=True):
@@ -262,8 +248,8 @@ def interactive_polar(array, overwrite=True, group=True):
         fig.canvas.draw_idle()
 
     div_s = widgets.FloatLogSlider(value=new_array.div, base=10, min=-4, max =0, step=0.2, description='Divergence')
-    az_s = widgets.FloatSlider(value=new_array.pointing[0].value, min=0, max=360, step=0.01, description='Azumith [deg]')
-    alt_s = widgets.FloatSlider(value=new_array.pointing[1].value, min=0, max=90, step=0.01, description='Altitude [deg]')
+    az_s = widgets.FloatSlider(value=new_array.pointing["az"].value, min=0, max=360, step=0.01, description='Azumith [deg]')
+    alt_s = widgets.FloatSlider(value=new_array.pointing["alt"].value, min=0, max=90, step=0.01, description='Altitude [deg]')
     
     ui = widgets.HBox([div_s, alt_s, az_s])
     out = widgets.interactive_output(update, {'div': div_s, 'az': az_s, 'alt': alt_s})
@@ -334,8 +320,8 @@ def multiplicity_plot(array, fig=None):
 
     ax.set_xlabel("Azimuth [deg]")
     ax.set_ylabel("Altitude [deg]")
-    ax.set_xlim(array.pointing[0].value-20, array.pointing[0].value+20)
-    ax.set_ylim(array.pointing[1].value-10, array.pointing[1].value+10)
+    ax.set_xlim(array.pointing["az"].value-20, array.pointing["az"].value+20)
+    ax.set_ylim(array.pointing["alt"].value-10, array.pointing["alt"].value+10)
     ax.grid(ls=":", alpha=0.5)
     ax.text(0.9, 0.9, r"Overlap: {:.1f} $\pm$ {:.1f}".format(average_overlap, np.sqrt(variance)), 
             ha="right", transform=ax.transAxes)
@@ -345,7 +331,7 @@ def multiplicity_plot(array, fig=None):
     ax_mul.set_ylabel('HFOV')
     ax_mul.set_xlabel('Multiplicity')
 
-def interactive_multiplicity(array, overwrite=True, group=True):
+def interactive_multiplicity(array, overwrite=True):
 
     if overwrite:
         new_array = array
@@ -363,8 +349,8 @@ def interactive_multiplicity(array, overwrite=True, group=True):
         fig.canvas.draw_idle()
 
     div_s = widgets.FloatLogSlider(value=new_array.div, base=10, min=-4, max =0, step=0.2, description='Divergence')
-    az_s = widgets.FloatSlider(value=new_array.pointing[0].value, min=0, max=360, step=0.01, description='Azumith [deg]')
-    alt_s = widgets.FloatSlider(value=new_array.pointing[1].value, min=0, max=90, step=0.01, description='Altitude [deg]')
+    az_s = widgets.FloatSlider(value=new_array.pointing["az"].value, min=0, max=360, step=0.01, description='Azumith [deg]')
+    alt_s = widgets.FloatSlider(value=new_array.pointing["alt"].value, min=0, max=90, step=0.01, description='Altitude [deg]')
     
     ui = widgets.HBox([div_s, alt_s, az_s])
     out = widgets.interactive_output(update, {'div': div_s, 'az': az_s, 'alt': alt_s})
