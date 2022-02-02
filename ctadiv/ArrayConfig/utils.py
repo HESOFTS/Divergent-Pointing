@@ -1,48 +1,11 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 import astropy.units as u
 
-from astropy.coordinates import SkyCoord, EarthLocation, AltAz, ICRS
-from astropy.time import Time
-
-from astroplan import Observer
-
-class CTA_INFO:
-    def __init__(self, location='Roque de los Muchachos', t_obs='2013-11-01T03:00', observer='Roque', verbose=True):
-        self._location = location
-        self._observer = Observer(location=self.loc, name=observer)
-        self._t_obs = Time(t_obs)
-        if verbose:
-            print("Observer        : ", self.observer.name)
-            print("Location        : ", self.location, self.loc, self.loc.to(u.km))
-            print("Observation time: ", self.t_obs)
-
-    @property
-    def info(self):
-        print("Observer        : ", self.observer.name)
-        print("Location        : ", self.location, self.loc.to(u.km))
-        print("Observation time: ", self.t_obs)
-
-    @property
-    def loc(self):
-        return EarthLocation.of_site(self.location)
-    
-    @property
-    def t_obs(self):
-        return self._t_obs
-
-    @property
-    def observer(self):
-        return self._observer
-    
-    @property
-    def altaz(self):
-        return AltAz(location=self.loc, obstime=self.t_obs)
-
-    @property
-    def location(self):
-        return self._location
-    
+from descartes import PolygonPatch
+from shapely.ops import unary_union, polygonize
+from shapely.geometry import mapping, LineString, Point
 
 
 def calc_mean(table, columns):
@@ -105,3 +68,44 @@ def convert_radius(radius, focal, toDeg=False):
     return radius
 
 
+def calc_multiplicity(array, plotting=False, ax=None):
+    array._table = deg2rad(array.table, toDeg=True)
+    
+    coord = array.get_pointing_coord(icrs=False)
+    polygons = [Point(az, alt).buffer(r) for az, alt, r in zip(coord.az.degree, coord.alt.degree, array.table["radius"])]
+
+    rings = [LineString(list(pol.exterior.coords)) for pol in polygons]
+    union = unary_union(rings)
+    result = [geom for geom in polygonize(union)]
+
+    count_overlaps = []
+    for res in result:
+        count_overlaps.append(0)
+        for pol in polygons:
+            if np.isclose(res.difference(pol).area, 0):
+                count_overlaps[-1] +=1
+
+    hfov = []
+    for patchsky in result:
+         hfov.append(patchsky.area)
+
+    hfov = np.array(hfov)
+
+    # multiplicity associated with each patch
+    overlaps = np.array(count_overlaps)
+    multiplicity = [[i, hfov[overlaps==i].sum()] for i in set(overlaps)]
+    
+    if plotting and ax:
+        max_multiplicity = array.size_of_array
+        cmap = plt.cm.get_cmap('rainbow')
+        color_list = cmap(np.linspace(0, 1, max_multiplicity))
+        
+        for i, pol in enumerate(result):
+            colore = overlaps[i]
+            vals = np.asarray(mapping(pol)['coordinates'])[0]
+            
+            ax.add_patch(PolygonPatch(mapping(pol), color=color_list[colore-1]))
+
+        return np.asarray(multiplicity), overlaps, ax
+    else:
+        return np.asarray(multiplicity)

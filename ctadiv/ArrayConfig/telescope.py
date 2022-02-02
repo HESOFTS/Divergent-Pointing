@@ -10,10 +10,14 @@ from . import utils as utils
 from . import visualization as visual
 from . import pointing
 
+from ..cta import CTA_Info
+
+from astropy.coordinates import SkyCoord
+
 class Telescope:
 
     _id = 0
-    def __init__(self, x, y, z, focal, camera_radius, toDeg=False):
+    def __init__(self, x, y, z, focal, camera_radius):
         
         Telescope._id += 1
         self.id = Telescope._id
@@ -24,8 +28,7 @@ class Telescope:
         self.camera_radius = camera_radius.to(u.m)
         self.alt = u.Quantity(0, u.rad)
         self.az = u.Quantity(0, u.rad)
-        
-        self.table = self.make_table(toDeg=toDeg)
+        self._table = self.make_table()
         
     def point_to_altaz(self, alt, az):
         self.alt = alt.to(u.rad)
@@ -33,6 +36,10 @@ class Telescope:
         if self.az < 0:
             self.az += 2*np.pi*u.rad
         self.update_table(["alt", "az", "zn", "pointing"])
+
+    @property
+    def table(self):
+        return self._table
 
     @property
     def zn(self):
@@ -52,20 +59,6 @@ class Telescope:
     def position(self):
         return np.array([self.x.to(u.m).value, self.y.to(u.m).value, self.z.to(u.m).value]*u.m)
 
-    def point_to_object(self, object):
-        """
-        Point to object.
-
-        Parameters
-        ----------
-        object: numpy.array([x, y, z])
-        """
-        GT = np.sqrt(((self.position - object) ** 2).sum())
-        alt_tel = np.arcsin((-self.z.value + object[2]) / GT)
-        az_tel = np.arctan2((- self.y.value + object[1]), (- self.x.value + object[0]))
-        self.point_to_altaz(alt_tel * u.rad, az_tel * u.rad)
-        self.update_table(["alt", "az", "zn", "pointing"])
-
     @property
     def pointing_vector(self):
         # return pointing.alt_az_to_vector(self.alt, self.az)
@@ -73,7 +66,7 @@ class Telescope:
                          -np.cos(self.alt.to(u.rad))*np.sin(self.az.to(u.rad)),
                          np.sin(self.alt.to(u.rad))])
 
-    def make_table(self, toDeg=False):
+    def make_table(self):
         properties = [[self.id, self.x.value, self.y.value, self.z.value, 
                        self.az.value, self.alt.value,  self.zn.value, self.focal.value, 
                        self.camera_radius.value, self.fov.value, *tuple(self.pointing_vector),
@@ -87,26 +80,23 @@ class Telescope:
         for col in table.columns[4:]:
             table[col].info.format = '{:.3f}'
         
-        if toDeg:
-            table = utils.deg2rad(table, toDeg=toDeg)
-            return table
-        else:
-            return table
+        table.units = "rad"
+        return table
 
     def update_table(self, vals):
         for val in vals:
             if val == "pointing":
                 new_val = self.pointing_vector
                 for i, v in enumerate(["p_x", "p_y", "p_z"]):
-                    self.table[v] = new_val[i]
-                    self.table[v].info.format = '{:.3f}'
+                    self._table[v] = new_val[i]
+                    self._table[v].info.format = '{:.3f}'
                 
             else:
-                self.table[val] = getattr(self, val)
-                self.table[val].info.format = '{:.3f}'
+                self._table[val] = getattr(self, val)
+                self._table[val].info.format = '{:.3f}'
 
-    def convert_unit(self, toDeg=True):
-        self.table = utils.deg2rad(self.table, toDeg)
+    def _convert_unit(self, toDeg=True):
+        self._table = utils.deg2rad(self._table, toDeg)
         
 
 class Array:
@@ -116,99 +106,68 @@ class Array:
         self.telescopes = telescope_list
 
         self._div = 0
-        self._pointing = {"az":0*u.deg, "alt":0*u.deg}
+        self._pointing = {"az":0*u.deg, "alt":0*u.deg, "ra": 0*u.deg, "dec": 0*u.deg}
 
         if frame == None:
-            self._frame = utils.CTA_INFO(verbose=False, **kwargs)
+            self._frame = CTA_Info(verbose=False, **kwargs)
+        else:
+            self._frame = frame
 
         self.__create_table__()
 
     def __create_table__(self):
+        
         table = []
         for tel in self.telescopes:
             table.append(tel.table)
         
-        self.table = tab.vstack(table)
+        if hasattr(self, "_table"):
+            units = self.table.units
+        else:
+            units = 'rad'
 
-        self.table.add_column(self.dist2tel, name="d_tel")
-        self.table["d_tel"].unit = u.m
-        self.table["d_tel"].info.format = "{:.2f}"
+        self._table = tab.vstack(table)
 
-    def convert_unit(self, toDeg=True, showTable=True):
-        self.table = utils.deg2rad(self.table, toDeg)
-        if showTable:
-            return self.table
+        self._table.add_column(self._dist2tel(), name="d_tel")
+        self._table["d_tel"].unit = u.m
+        self._table["d_tel"].info.format = "{:.2f}"
+
+        self._table.units = units
+
+    def _convert_unit(self, toDeg=True):
+        self._table = utils.deg2rad(self._table, toDeg)
+        if toDeg:
+            self._table.units = 'deg'
+        else:
+            self._table.units = 'rad'
+
+    def _dist2tel(self):
+        dist = np.zeros(self.size_of_array)
+        for i, axis in enumerate(["x", "y", "z"]):
+            dist += (self.table[axis] - self.barycenter[i])**2.
+        dist = np.sqrt(dist)
+        return dist
+
+    @property
+    def table(self):
+        if hasattr(self._table, "units"):
+            if self._table.units == 'deg':
+                self._table = utils.deg2rad(self._table, True)
+            else:
+                self._table = utils.deg2rad(self._table, False)
+        return self._table
 
     @property
     def size_of_array(self):
-        return self.table.__len__()
+        return self._table.__len__()
 
     @property
     def frame(self):
         return self._frame
     
     @property
-    def positions_array(self):
-        """
-        all telescopes positions as an array
-
-        Returns
-        -------
-        np.array
-        """
-        return np.array([tel.position for tel in self.telescopes])
-
-    @property
-    def pointing_vectors(self):
-        """
-        all telescopes pointing vectors as an array
-
-        Returns
-        -------
-        np.array
-        """
-        return np.array([tel.pointing_vector for tel in self.telescopes])
-        
-
-    @property
-    def positions_table(self):
-        """
-        all telescopes positions as a table
-
-        Returns
-        -------
-        astropy.table
-        """
-        return self.table["x", "y", "z"]
-        
-    
-    @property        
-    def pointing_table(self):
-        """
-        all telescopes pointing vectors as a table
-
-        Returns
-        -------
-        astropy.table
-        """
-        return self.table["p_x", "p_y", "p_z"]
-    
-    
-    def pointing_coord(self, icrs=True):
-        return pointing.pointing_coord(self.table, self.frame, icrs=icrs)
-    
-    @property
     def barycenter(self):
         return np.array(utils.calc_mean(self.table, ["x", "y", "z"]))
-
-    @property
-    def dist2tel(self):
-        dist = np.zeros(self.size_of_array)
-        for i, axis in enumerate(["x", "y", "z"]):
-            dist += (self.table[axis] - self.barycenter[i])**2.
-        dist = np.sqrt(dist)
-        return dist
-        #return np.sqrt(np.sum((self.positions_array - self.barycenter)**2, axis=1))
 
     @property
     def div(self):
@@ -217,8 +176,42 @@ class Array:
     @property
     def pointing(self):
         return self._pointing
+
+    def update_frame(self, site=None, time=None, delta_t=None, verbose=False):
+        self.frame.update(site=site, time=time, delta_t=delta_t, verbose=verbose)
+        self.divergent_pointing(self.div, ra=self.pointing["ra"], dec=self.pointing["dec"])
+
     
-    def divergent_pointing(self, div, alt_mean, az_mean):
+    def get_pointing_coord(self, icrs=True):
+        return pointing.pointing_coord(self.table, self.frame, icrs=icrs)
+
+    def set_pointing_coord(self, src=None, ra = None, dec = None, alt=None, az = None, unit='deg'):
+        
+        if type(src) == SkyCoord:
+            ra = src.icrs.ra.deg
+            dec = src.icrs.dec.deg
+            units = 'deg'
+            
+        if ra is not None and dec is not None:
+            src = self.frame.set_source_loc(ra=ra, dec=dec, unit=unit)
+            self._pointing["ra"] = src.icrs.ra.value * u.deg
+            self._pointing["dec"] = src.icrs.dec.value * u.deg
+            self._pointing["alt"] = src.alt.value * u.deg
+            self._pointing["az"] = src.az.value * u.deg
+        elif alt is not None and az is not None:
+            if unit == "deg":
+                self._pointing["alt"] = alt * u.deg
+                self._pointing["az"] = az * u.deg
+            else:
+                self._pointing["alt"] = alt * u.rad
+                self._pointing["alt"] = az * u.rad
+        
+        for tel in self.telescopes:
+            tel.point_to_altaz(self.pointing["alt"], self.pointing["az"])
+
+        self.__create_table__()
+        
+    def divergent_pointing(self, div, ra=None, dec = None, alt=None, az=None, unit="deg"):
         """
         Divergent pointing given a parameter div.
         Update pointing of all telescopes of the array
@@ -226,37 +219,30 @@ class Array:
         Parameters
         ----------
         div: float between 0 and 1
-        alt_mean: `astropy.Quantity`
+        ra(option): float
+            source ra 
+        dec(option): float
+            source dec 
+        alt(option): float
             mean alt pointing
-        az_mean: `astropy.Quantity`
+        az(option): float
             mean az pointing
+        unit(option): string either 'deg' (default) or 'rad'
         """
-        if type(alt_mean) != u.Quantity:
-            print("[Warning] The unit of the input alt is assumed to be 'deg'")
-            alt_mean = alt_mean*u.deg
 
-        if type(az_mean) != u.Quantity:
-            print("[Warning] The unit of the input az is assumed to be 'deg'")
-            az_mean = az_mean*u.deg
-            if az_mean.value < 0:
-                az_mean += 360*u.deg
+        self.set_pointing_coord(ra=ra, dec = dec, alt=alt, az=az, unit=unit)
 
         self._div = div
-        self._pointing["az"] = az_mean
-        self._pointing["alt"] = alt_mean
-
+        
         if div > 1 or div < 0:
             print("[Error] The div value should be between 0 and 1.")
-        elif div==0:
-            for tel in self.telescopes:
-                tel.point_to_altaz(alt_mean, az_mean)
-        else:
-            G = pointing.pointG_position(self.barycenter, div, alt_mean, az_mean)
+        elif div!=0:
+            G = pointing.pointG_position(self.barycenter, self.div, self.pointing["alt"], self.pointing["az"])
             for tel in self.telescopes:
                 alt_tel, az_tel = pointing.tel_div_pointing(tel.position, G)
                 tel.point_to_altaz(alt_tel*u.rad, az_tel*u.rad)
         
-        self.__create_table__()
+            self.__create_table__()
 
     def display(self, projection=None, ax=None, group=False, skymap=False, **kwargs):
         """
@@ -296,8 +282,8 @@ class Array:
         
         return ax
 
-    def skymap_polar(self, group, fig=None):
-        return visual.skymap_polar(self, group=group, fig=fig)
+    def skymap_polar(self, group=None, fig=None, filename=None):
+        return visual.skymap_polar(self, group=group, fig=fig, filename=filename)
 
     def multiplicity_plot(self, fig=None):
         return visual.multiplicity_plot(self, fig=fig)
@@ -313,20 +299,29 @@ class Array:
                 for i in group[key]:
                     groupping[i-1] = j
                 j+=1
-
-            tel_group = self.table.group_by(np.asarray(groupping))
+            tel_group = self._table.group_by(np.asarray(groupping))
         elif group:
-            tel_group = self.table.group_by("radius")
+            tel_group = self._table.group_by("radius")
             labels = ["group_{}".format(i+1) for i in range(len(tel_group.groups))]
         else:
-            tel_group = self.table.group_by(np.zeros(self.size_of_array))
+            tel_group = self._table.group_by(np.zeros(self.size_of_array))
             labels = ["_nolegend_"]
-        
         return (tel_group, labels)
 
-    def export_cfg(self, filename=None):
+    def export_cfg(self, filename=None, verbose=False):
         
-        #create  simtel cfg file
+        """
+        Export cfg file.
+
+        Parameters
+        ----------
+        filename(option): string
+            A default name is 'CTA-ULTRA6-LaPalma-divX-azX-altX.cfg'
+        
+        verbose(option)
+
+        """
+
         if filename==None:
             filename = 'CTA-ULTRA6-LaPalma-div{}-az{}-alt{}.cfg'.format(
                 str(self.div).replace(".", "_"), 
@@ -334,14 +329,14 @@ class Array:
                 str(self.pointing["alt"].value).replace(".", "_"))
         
         with open(filename, 'w') as f:
-            f.write('#ifndef TELESCOPE')
-            f.write('# define TELESCOPE 0')
+            f.write('#ifndef TELESCOPE\n')
+            f.write('#  define TELESCOPE 0\n')
             f.write('#endif\n')
-            f.write('#if TELESCOPE == 0\n""")')
+            f.write('#if TELESCOPE == 0\n')
             f.write('   TELESCOPE_THETA={:.2f} \n'.format(90 - self.pointing["alt"].value))
             f.write('   TELESCOPE_PHI={:.2f} \n'.format(self.pointing["az"].value))
-            f.write("""\n% Global and default configuration for things missing in telescope-specific config.
-                # include <CTA-ULTRA6-LST.cfg>\n""")
+            f.write('\n% Global and default configuration for things missing in telescope-specific config.\n')
+            f.write('#  include <CTA-ULTRA6-LST.cfg>\n')    
             for n, tel in enumerate(self.table, 1):
                 zd = 90 - tel['alt']
                 f.write('\n#elif TELESCOPE == {:d}\n'.format(n))
@@ -352,9 +347,13 @@ class Array:
                 f.write('   TELESCOPE_THETA={:.2f}\n'.format(zd))
                 f.write('   TELESCOPE_PHI={:.2f}\n'.format(tel["az"]))
             f.write('#else\n')
-            f.write('Error Invalid telescope for CTA-ULTRA6 La Palma configuration.\n')
+            f.write('   Error Invalid telescope for CTA-ULTRA6 La Palma configuration.\n')
             f.write('#endif\n')
-            f.write('trigger_telescopes = 2 % In contrast to Prod-3 South we apply loose stereo trigger immediately')
-            f.write('array_trigger = array_trigger_ultra6_diver-test.dat')
+            f.write('trigger_telescopes = 2 % In contrast to Prod-3 South we apply loose stereo trigger immediately\n')
+            f.write('array_trigger = array_trigger_ultra6_diver-test.dat\n')
         
+        if verbose:
+            with open(filename, 'r') as f:
+                for line in f.readlines():
+                    print(line)
 

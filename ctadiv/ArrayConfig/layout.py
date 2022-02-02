@@ -5,7 +5,7 @@ import numpy as np
 
 from . import utils
 
-def LoadConfig(file, tel_id=-1, radius="degrees"):
+def LoadConfig(file, tel_id=-1, radius="degrees", frame=None, **kwargs):
     
     """
     Load the telescope configuration file
@@ -41,6 +41,6 @@ def LoadConfig(file, tel_id=-1, radius="degrees"):
             tels.append(tel)
 
     if tel_id == -1:
-        return Array(tels)
+        return Array(tels, frame=frame, **kwargs)
     else:
         return tels[tel_id-1]
