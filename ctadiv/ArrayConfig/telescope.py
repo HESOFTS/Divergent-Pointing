@@ -14,6 +14,9 @@ from ..cta import CTA_Info
 
 from astropy.coordinates import SkyCoord
 
+from shapely.ops import unary_union, polygonize
+from shapely.geometry import LineString, Point
+
 class Telescope:
 
     _id = 0
@@ -121,11 +124,11 @@ class Array:
         for tel in self.telescopes:
             table.append(tel.table)
         
+        units = 'rad'
         if hasattr(self, "_table"):
-            units = self.table.units
-        else:
-            units = 'rad'
-
+            if hasattr(self._table, "units"):
+                units = self.table.units
+        
         self._table = tab.vstack(table)
 
         self._table.add_column(self._dist2tel(), name="d_tel")
@@ -151,9 +154,9 @@ class Array:
     @property
     def table(self):
         if hasattr(self._table, "units"):
-            if self._table.units == 'deg':
+            if (self._table.units == 'deg')*(self._table["az"].unit == u.rad):
                 self._table = utils.deg2rad(self._table, True)
-            else:
+            elif (self._table.units == 'rad')*(self._table["az"].unit == u.deg):
                 self._table = utils.deg2rad(self._table, False)
         return self._table
 
@@ -176,6 +179,41 @@ class Array:
     @property
     def pointing(self):
         return self._pointing
+
+    def calc_mean(self, params):
+        return np.array(utils.calc_mean(self.table, params))
+
+    def hFoV(self, m_cut=0, return_multiplicity=False, full_output=False):
+        if self.table.units == 'rad':
+            self._convert_unit(toDeg=True)
+        
+        coord = self.get_pointing_coord(icrs=False)
+        polygons = [Point(az, alt).buffer(r) for az, alt, r in zip(coord.az.degree, coord.alt.degree, self.table["radius"])]
+
+        union = unary_union([LineString(list(pol.exterior.coords)) for pol in polygons])
+        geoms = [geom for geom in polygonize(union)]
+        hfov = [geom.area for geom in geoms]
+
+        count_overlaps = np.zeros(len(geoms))
+        for i, geom in enumerate(geoms):
+            count_overlaps[i] = sum([1 for pol in polygons if abs(geom.difference(pol).area)<1e-5])
+
+        hfov = np.array(hfov)
+
+        # multiplicity associated with each patch
+        overlaps = np.array(count_overlaps)
+        multiplicity = np.array([[i, hfov[overlaps==i].sum()] for i in set(overlaps)])
+
+        fov = sum(multiplicity[:,1][multiplicity[:,0]>=m_cut])*u.deg**2
+
+        if full_output:
+            return multiplicity, overlaps, geoms
+        elif return_multiplicity:
+            ave = np.average(multiplicity[:,0], weights=multiplicity[:,1])
+            var = np.average((multiplicity[:,0]-ave)**2, weights=multiplicity[:,1])
+            return fov, ave, var
+        else:
+            return fov
 
     def update_frame(self, site=None, time=None, delta_t=None, verbose=False):
         self.frame.update(site=site, time=time, delta_t=delta_t, verbose=verbose)

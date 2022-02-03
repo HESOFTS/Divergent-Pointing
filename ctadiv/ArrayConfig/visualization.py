@@ -26,6 +26,8 @@ from matplotlib.projections import PolarAxes
 from matplotlib.transforms import Affine2D
 from astropy.visualization.wcsaxes import SphericalCircle
 
+from shapely.geometry import mapping
+from descartes import PolygonPatch
 
 def display_1d(table, proj, ax=None, labels=None, **kwargs):
     
@@ -136,7 +138,7 @@ def display_3d(table, proj, ax=None, labels=None, **kwargs):
 
 def display_barycenter(table, proj, ax=None, labels=None, fig=None, **kwargs):
 
-    if fig == None:
+    if fig is None:
         fig = plt.figure() 
 
     if ax is None:
@@ -175,7 +177,7 @@ def interactive_barycenter(array, proj="xy", overwrite=True, group=False):
 
     def update(div=0, az=0, alt=0):
 
-        new_array.divergent_pointing(div, az_mean = az*u.deg, alt_mean = alt*u.deg)
+        new_array.divergent_pointing(div, az = az, alt = alt, unit='deg')
         new_array._convert_unit(toDeg=True)
         plt.cla()
         groupped_table, labels = new_array.group_by(group)
@@ -208,8 +210,12 @@ def display_skymap(table, frame, ax=None, **kwargs):
 
 def skymap_polar(array, group=False, fig=None, filename=None):
 
-    if fig == None:
+    if fig is None:
         fig = plt.figure() 
+    else:
+        ax = fig.gca()
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
 
     # PolarAxes.PolarTransform takes radian. However, we want our coordinate
     # system in degree
@@ -251,12 +257,12 @@ def skymap_polar(array, group=False, fig=None, filename=None):
     # make ticklabels of right and top axis visible.
     ax1.axis["right"].major_ticklabels.set_visible(False)
     ax1.axis["top"].major_ticklabels.set_visible(False)
-    ax1.axis["bottom"].major_ticklabels.set_visible(True)
 
     fig.add_subplot(ax1)
 
     # A parasite axes with given transform
     ax2 = ParasiteAxesAuxTrans(ax1, tr, "equal")
+    
     # note that ax2.transData == tr + ax1.transData
     # Anything you draw in ax2 will match the ticks and grids of ax1.
     ax1.parasites.append(ax2)
@@ -282,11 +288,11 @@ def skymap_polar(array, group=False, fig=None, filename=None):
     ax1.set_ylabel("Altitude [deg]", fontsize=20)
     ax1.legend(loc=1)
 
+
     if filename is not None:
         plt.savefig(filename)
         plt.show(block=False)
-    else:
-        plt.show()
+
 
 
 def interactive_polar(array, overwrite=True, group=False):
@@ -298,9 +304,10 @@ def interactive_polar(array, overwrite=True, group=False):
 
     fig = plt.figure()
 
+
     def update(div=0, az=0, alt=0):
 
-        new_array.divergent_pointing(div, az_mean = az*u.deg, alt_mean = alt*u.deg)
+        new_array.divergent_pointing(div, az = az, alt = alt, unit='deg')
         new_array._convert_unit(toDeg=True)
         plt.cla()
         new_array.skymap_polar(group=group, fig=fig)
@@ -317,28 +324,34 @@ def interactive_polar(array, overwrite=True, group=False):
     return new_array
 
 
-def multiplicity_plot(array, fig=None):
+def multiplicity_plot(array, m_cut = 0, fig=None):
 
-    if fig == None:
-        fig = plt.figure(figsize=(10, 4)) 
+    m, overlaps, geoms = array.hFoV(full_output=True)
+    max_m = int(array.size_of_array)
+    ave_multi = np.average(m[:,0], weights=m[:,1])
+    var_multi = np.average((m[:,0]-ave_multi)**2, weights=m[:,1])
     
-    array._convert_unit(toDeg=True)
-    max_multiplicity = array.size_of_array
+    if fig is None:
+        fig = plt.figure(figsize=(10, 4)) 
+
     cmap = plt.cm.get_cmap('rainbow')
-    color_list = cmap(np.linspace(0, 1, max_multiplicity))
-    bounds = np.arange(max_multiplicity + 1) + 1
+    color_list = cmap(np.linspace(0, 1, max_m))
+    bounds = np.arange(max_m + 1) + 1
 
     gs  = mpl.gridspec.GridSpec(1, 2)
 
     ax = plt.subplot(gs[0])
-    ax_cb = fig.add_axes([0.46,0.1,0.01,0.8])
+    ax_cb = fig.add_axes([0.44,0.15,0.01,0.7])
     ax_mul = plt.subplot(gs[1])
 
-    plt.subplots_adjust(wspace=0.4)
+    plt.subplots_adjust(wspace=0.5)
 
-    multiplicity, overlaps, ax = utils.calc_multiplicity(array, plotting=True, ax=ax)
-    ave_multi = np.average(multiplicity[:,0], weights=multiplicity[:,1])
-    var_multi = np.average((multiplicity[:,0]-ave_multi)**2, weights=multiplicity[:,1])
+    cmap = plt.cm.get_cmap('rainbow')
+    color_list = cmap(np.linspace(0, 1, max_m))
+
+    for i, pol in enumerate(geoms):
+        colore = int(overlaps[i])
+        ax.add_patch(PolygonPatch(mapping(pol), color=color_list[colore-1]))
     
     norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
 
@@ -348,22 +361,21 @@ def multiplicity_plot(array, fig=None):
                                      boundaries = bounds,
                                      orientation='vertical',
                                      label='Multiplicity')
-    cb1.set_ticks(np.arange(max_multiplicity + 1) + 0.5)
-    cb1.set_ticklabels(np.arange(max_multiplicity + 1) + 1)
+    cb1.set_ticks(np.arange(0, max_m+1, step=2) + 1)
+    cb1.set_ticklabels(np.arange(0, max_m+1, step=2))
 
     ax.set_xlabel("Azimuth [deg]")
     ax.set_ylabel("Altitude [deg]")
     ax.set_xlim(np.min(array.table["az"])-5, np.max(array.table["az"])+5)
     ax.set_ylim(np.min(array.table["alt"])-5, np.max(array.table["alt"])+5)
     
-    ax.text(0.9, 0.9, r"Overlap: {:.1f} $\pm$ {:.1f}".format(ave_multi, np.sqrt(var_multi)), 
+    ax.text(0.9, 0.9, r"Average: {:.1f} $\pm$ {:.1f}".format(ave_multi, np.sqrt(var_multi)), 
             ha="right", transform=ax.transAxes)
 
-
-    ax_mul.bar(multiplicity[:,0], multiplicity[:,1])
-    ax_mul.text(0.9, 0.9, "Sum = {:.0f}".format(sum(multiplicity[:,1])), ha="right", transform=ax_mul.transAxes)
-    ax_mul.set_xticks(range(1, max_multiplicity+1))
-    ax_mul.set_xlim(0.5, max_multiplicity+0.5)
+    ax_mul.bar(m[:,0], m[:,1])
+    ax_mul.text(0.9, 0.9, "Total hFoV = {:.0f}".format(sum(m[:,1][m[:,0]>=m_cut])), ha="right", transform=ax_mul.transAxes)
+    ax_mul.set_xticks(np.arange(0, max_m+1, step=2))
+    ax_mul.set_xlim(0.5, max_m+0.5)
     ax_mul.set_ylabel('HFOV')
     ax_mul.set_xlabel('Multiplicity')
 
@@ -379,7 +391,7 @@ def interactive_multiplicity(array, overwrite=True):
 
     def update(div=0, az=0, alt=0):
 
-        new_array.divergent_pointing(div, az_mean = az*u.deg, alt_mean = alt*u.deg)
+        new_array.divergent_pointing(div, az = az, alt = alt, unit='deg')
         new_array._convert_unit(toDeg=True)
         plt.cla()
         new_array.multiplicity_plot(fig=fig)

@@ -3,11 +3,6 @@ import matplotlib.pyplot as plt
 
 import astropy.units as u
 
-from descartes import PolygonPatch
-from shapely.ops import unary_union, polygonize
-from shapely.geometry import mapping, LineString, Point
-
-
 def calc_mean(table, columns):
     """
     Calculate a mean value of columns
@@ -67,45 +62,3 @@ def convert_radius(radius, focal, toDeg=False):
         radius= np.tan(temp.value)*focal
     return radius
 
-
-def calc_multiplicity(array, plotting=False, ax=None):
-    array._table = deg2rad(array.table, toDeg=True)
-    
-    coord = array.get_pointing_coord(icrs=False)
-    polygons = [Point(az, alt).buffer(r) for az, alt, r in zip(coord.az.degree, coord.alt.degree, array.table["radius"])]
-
-    rings = [LineString(list(pol.exterior.coords)) for pol in polygons]
-    union = unary_union(rings)
-    result = [geom for geom in polygonize(union)]
-
-    count_overlaps = []
-    for res in result:
-        count_overlaps.append(0)
-        for pol in polygons:
-            if np.isclose(res.difference(pol).area, 0):
-                count_overlaps[-1] +=1
-
-    hfov = []
-    for patchsky in result:
-         hfov.append(patchsky.area)
-
-    hfov = np.array(hfov)
-
-    # multiplicity associated with each patch
-    overlaps = np.array(count_overlaps)
-    multiplicity = [[i, hfov[overlaps==i].sum()] for i in set(overlaps)]
-    
-    if plotting and ax:
-        max_multiplicity = array.size_of_array
-        cmap = plt.cm.get_cmap('rainbow')
-        color_list = cmap(np.linspace(0, 1, max_multiplicity))
-        
-        for i, pol in enumerate(result):
-            colore = overlaps[i]
-            vals = np.asarray(mapping(pol)['coordinates'])[0]
-            
-            ax.add_patch(PolygonPatch(mapping(pol), color=color_list[colore-1]))
-
-        return np.asarray(multiplicity), overlaps, ax
-    else:
-        return np.asarray(multiplicity)
