@@ -13,13 +13,15 @@ def LoadConfig(file, tel_id=-1, radius="degrees", frame=None, **kwargs):
     Parameters
     ----------
     file: str 
-          the name of file
-    tel_id: int 
-            If you want to load only a single telescope,
-            you can set this parameter (defalut: load all)
-    radius: str
-            Define the unit of camera radius
-            either 'meters' or 'degrees'
+        File name
+    tel_id: int, optional
+        If you want to load only a single telescope,
+        you can set this parameter (defalut: -1)
+    radius: str, optional
+        Define the unit of camera radius
+        either `meters` or `degrees` (default: degrees).
+    frame: class.CTA_Info, optional
+    kwargs: args for class.Array
         
     Returns
     -------

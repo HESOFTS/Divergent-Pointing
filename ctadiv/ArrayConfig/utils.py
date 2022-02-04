@@ -15,7 +15,7 @@ def calc_mean(table, columns):
 
     Returns
     -------
-    np.float
+    float
     """
 
     if np.size(columns) == 1:
@@ -30,6 +30,20 @@ def calc_mean(table, columns):
     return tuple(mean)
     
 def deg2rad(table, toDeg=False):
+    """
+    Convert units in a table from rad to deg and vice versa.
+    `az`, `alt`, `zn`, `radius`, `fov` units are changed.
+
+    Parameters
+    ----------
+    table: astropy.table
+    toDeg: bool, optional
+        If True, the output table is in `deg`. Otherwise, in `rad`.
+
+    Returns
+    -------
+    astropy.table
+    """
     if toDeg:
         for par in ["az", "alt", "zn"]:
             table[par] = table[par].to(u.deg)
@@ -53,6 +67,23 @@ def deg2rad(table, toDeg=False):
     return table
 
 def convert_radius(radius, focal, toDeg=False):
+    """
+    Convert the unit of camera radius from degree to meter, and vice versa.
+
+    Parameters
+    ----------
+    radius: float, astropy.Quantity
+        camera radius of a telecope
+    focal: float, astropy.Quantity 
+        focal length of a telescope
+    toDeg: bool, optional
+        If True, the output is in degree.
+        If False, the output is in meter.
+
+    Returns
+    -------
+    astropy.Quantity
+    """
     if toDeg and radius.unit == u.m:
         temp = np.arctan(np.asarray(radius/focal))
         temp = temp*u.rad

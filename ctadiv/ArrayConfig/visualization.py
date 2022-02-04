@@ -202,7 +202,7 @@ def display_skymap(table, frame, ax=None, **kwargs):
                 
     point = SkyCoord(ra=radec.ra, dec=radec.dec)
 
-    target = FixedTarget(coord=point, name="abc")
+    target = FixedTarget(coord=point, name="source")
 
     plot_sky(target, frame.observer, frame.t_obs, ax=ax, style_kwargs=kwargs)
 
@@ -217,15 +217,8 @@ def skymap_polar(array, group=False, fig=None, filename=None):
         ax.set_xticklabels([])
         ax.set_yticklabels([])
 
-    # PolarAxes.PolarTransform takes radian. However, we want our coordinate
-    # system in degree
     tr = Affine2D().scale(np.pi/180., 1.).translate(+np.pi/2.,0) + PolarAxes.PolarTransform()
 
-    # polar projection, which involves cycle, and also has limits in
-    # its coordinates, needs a special method to find the extremes
-    # (min, max of the coordinate within the view).
-
-    # 20, 20 : number of sampling points along x, y direction
     n = 20
     extreme_finder = angle_helper.ExtremeFinderCycle(10, 10,
                                                      lon_cycle=360,
@@ -234,15 +227,9 @@ def skymap_polar(array, group=False, fig=None, filename=None):
                                                      lat_minmax=(-90, 90),
                                                      )
 
-    # Find a grid values appropriate for the coordinate (degree,
-    # minute, second).
     grid_locator1 = angle_helper.LocatorDMS(12)
 
     tick_formatter1 = angle_helper.FormatterDMS()
-    # And also uses an appropriate formatter.  Note that,the
-    # acceptable Locator and Formatter class is a bit different than
-    # that of mpl's, and you cannot directly use mpl's Locator and
-    # Formatter here (but may be possible in the future).
 
     grid_helper = GridHelperCurveLinear(tr,
                                         extreme_finder=extreme_finder,
@@ -253,18 +240,13 @@ def skymap_polar(array, group=False, fig=None, filename=None):
     
 
     ax1 = SubplotHost(fig, 1, 1, 1, grid_helper=grid_helper)
-
-    # make ticklabels of right and top axis visible.
     ax1.axis["right"].major_ticklabels.set_visible(False)
     ax1.axis["top"].major_ticklabels.set_visible(False)
 
     fig.add_subplot(ax1)
 
-    # A parasite axes with given transform
     ax2 = ParasiteAxesAuxTrans(ax1, tr, "equal")
-    
-    # note that ax2.transData == tr + ax1.transData
-    # Anything you draw in ax2 will match the ticks and grids of ax1.
+
     ax1.parasites.append(ax2)
 
     array._convert_unit(toDeg=True)
@@ -288,12 +270,9 @@ def skymap_polar(array, group=False, fig=None, filename=None):
     ax1.set_ylabel("Altitude [deg]", fontsize=20)
     ax1.legend(loc=1)
 
-
     if filename is not None:
         plt.savefig(filename)
         plt.show(block=False)
-
-
 
 def interactive_polar(array, overwrite=True, group=False):
 
