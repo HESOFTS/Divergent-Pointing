@@ -104,7 +104,7 @@ class Telescope:
 
 class Array:
 
-    def __init__(self, telescope_list, frame=None, **kwargs):
+    def __init__(self, telescope_list, frame=None, pointing2src=False, **kwargs):
         
         self.telescopes = telescope_list
 
@@ -115,6 +115,9 @@ class Array:
             self._frame = CTA_Info(verbose=False, **kwargs)
         else:
             self._frame = frame
+            if pointing2src and (self.frame.source is not None):
+                self.set_pointing_coord(ra = self.frame.source.icrs.ra.deg, 
+                                        dec = self.frame.source.icrs.dec.deg)
 
         self.__create_table__()
 

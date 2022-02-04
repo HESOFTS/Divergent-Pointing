@@ -18,6 +18,7 @@ class CTA_Info:
         self._observer = Observer(location=self.loc, name=self.name)
         self._t_obs = Time(time, format='isot', scale='utc')
         self._source = None
+        self._timestep = np.linspace(-12, 12, 100)*u.hour
         if verbose:
             self.info
 
@@ -57,19 +58,23 @@ class CTA_Info:
     def name(self):
         return self._name
 
-    @property
-    def delta_t(self):
-        return np.linspace(-12, 12, 100)*u.hour
+    def get_sun_loc(self, timespan=False):
+        if timespan:
+            time = self.t_obs+self._timestep
+        else:
+            time = self.t_obs
 
-    @property
-    def get_sun_loc(self):
-        frame = AltAz(obstime=self.t_obs+self.delta_t, location=self.loc)
-        return get_sun(self.t_obs+self.delta_t).transform_to(frame)
+        frame = AltAz(obstime=time, location=self.loc)
+        return get_sun(time).transform_to(frame)
 
-    @property
-    def get_moon_loc(self, time=None):
-        frame = AltAz(obstime=self.t_obs+self.delta_t, location=self.loc)
-        return get_moon(self.t_obs+self.delta_t).transform_to(frame)
+    def get_moon_loc(self, timespan=False):
+        if timespan:
+            time = self.t_obs+self._timestep
+        else:
+            time = self.t_obs
+
+        frame = AltAz(obstime=time, location=self.loc)
+        return get_moon(time).transform_to(frame)
 
     @property
     def source(self):
@@ -85,9 +90,8 @@ class CTA_Info:
             self._t_obs = Time(time, format='isot', scale='utc')
 
         elif delta_t is not None:
-            
             if type(delta_t) != u.Quantity:
-                print("[Warning] The unit of the input delta_t is assumed to be 'hour'.")
+                print("[Warning] The unit of delta_t is assumed to be 'hour'.")
                 delta_t = delta_t*u.hour
             
             self._t_obs = Time(self.t_obs+delta_t, format='isot', scale='utc')            
@@ -105,36 +109,52 @@ class CTA_Info:
         else:
             raise Warning(f"{site} is not a valid site choice")
 
-    def set_source_loc(self, ra=None, dec=None, timespan=False, unit='deg'):
+    def set_source_loc(self, ra=None, dec=None, timespan=False, timesstep=None, unit='deg'):
+        if timestep is not None:
+            if type(timestep) != u.Quantity:
+                print("[Warning] The unit of timestep is assumed to be 'hour'.")
+                self._timestep = timestep*u.hour
+            else:
+                self._timestep = timestep
+
         if (ra is not None) and (dec is not None):
             source_radec = SkyCoord(ra=ra, dec=dec, frame=ICRS, unit=unit)
+            
         if timespan:
-            frame = AltAz(obstime=self.t_obs+self.delta_t, location=self.loc)
+            frame = AltAz(obstime=self.t_obs+self._timestep, location=self.loc)
+            src = source_radec.transform_to(frame)
+        else:
+            src = source_radec.transform_to(self.altaz)
+            self._source = src
         
-        self._source = source_radec.transform_to(frame if timespan else self.altaz)
-        
-        return self._source
+        return src
 
-    def navigation_plot(self, ra=None, dec=None, unit='deg', **kwargs):
-        sun = self.get_sun_loc
-        moon = self.get_moon_loc
-        plt.plot(self.delta_t, sun.alt, color='r', label='Sun')
-        plt.plot(self.delta_t, moon.alt, color=[0.75]*3, ls='--', label='Moon')
+    def navigation_plot(self, ra=None, dec=None, unit='deg', timestep = None, **kwargs):
+        if timestep is not None:
+            if type(timestep) != u.Quantity:
+                print("[Warning] The unit of timestep is assumed to be 'hour'.")
+                self._timestep = timestep*u.hour
+            else:
+                self._timestep = timestep
+
+        sun = self.get_sun_loc(timespan=True)
+        moon = self.get_moon_loc(timespan=True)
+        plt.plot(self._timestep, sun.alt, color='r', label='Sun')
+        plt.plot(self._timestep, moon.alt, color=[0.75]*3, ls='--', label='Moon')
 
         if (ra is not None) and (dec is not None):
             src = self.set_source_loc(ra=ra, dec=dec, timespan=True, unit=unit)
         else:
             src = self.set_source_loc(ra=self.source.icrs.ra, dec=self.source.icrs.dec, timespan=True, unit=unit)
 
-        plt.plot(self.delta_t, src.alt, lw=0.5, alpha=0.5, color="orange")
-        plt.scatter(self.delta_t, src.alt,
+        plt.plot(self._timestep, src.alt, lw=0.5, alpha=0.5, color="orange")
+        plt.scatter(self._timestep, src.alt,
                     c= src.az, s=8,
                     cmap='viridis',**kwargs)
 
-
-        plt.fill_between(self.delta_t, 0, 90*u.deg,
+        plt.fill_between(self._timestep, 0, 90*u.deg,
                          sun.alt < -0*u.deg, color='0.5', zorder=0)
-        plt.fill_between(self.delta_t, 0*u.deg, 90*u.deg,
+        plt.fill_between(self._timestep, 0*u.deg, 90*u.deg,
                          sun.alt < -18*u.deg, color='k', zorder=0)
 
         plt.colorbar().set_label('Azimuth [deg]')
