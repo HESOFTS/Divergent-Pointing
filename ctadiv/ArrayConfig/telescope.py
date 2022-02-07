@@ -85,7 +85,7 @@ class Telescope:
         table.units = "rad"
         self._table = table
 
-    def __update_table__(self, names, values=None):
+    def __update_table__(self, names, values={}):
         """
         Update a table with new parameters
     
@@ -436,7 +436,7 @@ class Array:
             return multiplicity, overlaps, geoms
         elif return_multiplicity:
             m_ave = np.average(multiplicity[:,0], weights=multiplicity[:,1])
-            m_var = np.average((multiplicity[:,0]-ave)**2, weights=multiplicity[:,1])
+            m_var = np.average((multiplicity[:,0]-m_ave)**2, weights=multiplicity[:,1])
             return fov, m_ave, m_var
         else:
             return fov
@@ -513,7 +513,7 @@ class Array:
         for tel in self.telescopes:
             tel.__point_to_altaz__(self.pointing["alt"], self.pointing["az"])
 
-        self.__create_table__()
+        self.__make_table__()
         
     def divergent_pointing(self, div, ra=None, dec = None, alt=None, az=None, units="deg"):
         """
@@ -547,7 +547,7 @@ class Array:
                 alt_tel, az_tel = pointing.tel_div_pointing(tel.position, G)
                 tel.__point_to_altaz__(alt_tel*u.rad, az_tel*u.rad)
         
-            self.__create_table__()
+            self.__make_table__()
     
     def group_by(self, group = None):
         

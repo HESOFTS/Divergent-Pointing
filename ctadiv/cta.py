@@ -246,7 +246,7 @@ class CTA_Info:
         astropy.coordinates.SkyCoord
         """
 
-        source_radec = SkyCoord(ra=ra, dec=dec, frame=ICRS, units=units)
+        source_radec = SkyCoord(ra=ra, dec=dec, frame=ICRS, unit=units)
         
         if timespan:
             time = self._time_bin(timestep)

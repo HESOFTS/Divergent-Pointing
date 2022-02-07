@@ -177,8 +177,8 @@ def interactive_barycenter(array, proj="xy", overwrite=True, group=False):
 
     def update(div=0, az=0, alt=0):
 
-        new_array.divergent_pointing(div, az = az, alt = alt, unit='deg')
-        new_array._convert_unit(toDeg=True)
+        new_array.divergent_pointing(div, az = az, alt = alt, units='deg')
+        new_array.__convert_units__(toDeg=True)
         plt.cla()
         groupped_table, labels = new_array.group_by(group)
         display_barycenter(groupped_table, proj, labels=labels, fig=fig)
@@ -249,7 +249,7 @@ def skymap_polar(array, group=False, fig=None, filename=None):
 
     ax1.parasites.append(ax2)
 
-    array._convert_unit(toDeg=True)
+    array.__convert_units__(toDeg=True)
     tel_group, labels = array.group_by(group)
 
     for tel_table, label in zip(tel_group.groups, labels):
@@ -286,8 +286,8 @@ def interactive_polar(array, overwrite=True, group=False):
 
     def update(div=0, az=0, alt=0):
 
-        new_array.divergent_pointing(div, az = az, alt = alt, unit='deg')
-        new_array._convert_unit(toDeg=True)
+        new_array.divergent_pointing(div, az = az, alt = alt, units='deg')
+        new_array.__convert_units__(toDeg=True)
         plt.cla()
         new_array.skymap_polar(group=group, fig=fig)
         fig.canvas.draw_idle()
@@ -370,8 +370,8 @@ def interactive_multiplicity(array, overwrite=True):
 
     def update(div=0, az=0, alt=0):
 
-        new_array.divergent_pointing(div, az = az, alt = alt, unit='deg')
-        new_array._convert_unit(toDeg=True)
+        new_array.divergent_pointing(div, az = az, alt = alt, units='deg')
+        new_array.__convert_units__(toDeg=True)
         plt.cla()
         new_array.multiplicity_plot(fig=fig)
         fig.canvas.draw_idle()
