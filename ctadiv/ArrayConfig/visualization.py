@@ -270,6 +270,7 @@ def skymap_polar(array, group=False, fig=None, filename=None):
     ax1.set_ylabel("Altitude [deg]", fontsize=20)
     ax1.legend(loc=1)
 
+
     if filename is not None:
         plt.savefig(filename)
         plt.show(block=False)
@@ -328,10 +329,15 @@ def multiplicity_plot(array, m_cut = 0, fig=None):
     cmap = plt.cm.get_cmap('rainbow')
     color_list = cmap(np.linspace(0, 1, max_m))
 
+    minmax = []
     for i, pol in enumerate(geoms):
         colore = int(overlaps[i])
-        ax.add_patch(PolygonPatch(mapping(pol), color=color_list[colore-1]))
-    
+        pol_map = mapping(pol)
+        ax.add_patch(PolygonPatch(pol_map, color=color_list[colore-1]))
+        patch_az = np.asarray(pol_map['coordinates'])[0][:,0]
+        minmax.append([min(patch_az), max(patch_az)])
+    minmax = np.asarray(minmax)
+
     norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
 
     cb1 = mpl.colorbar.ColorbarBase(ax_cb,
@@ -345,7 +351,7 @@ def multiplicity_plot(array, m_cut = 0, fig=None):
 
     ax.set_xlabel("Azimuth [deg]")
     ax.set_ylabel("Altitude [deg]")
-    ax.set_xlim(np.min(array.table["az"])-5, np.max(array.table["az"])+5)
+    ax.set_xlim(np.min(minmax[:,0])-5, np.max(minmax[:,1])+5)
     ax.set_ylim(np.min(array.table["alt"])-5, np.max(array.table["alt"])+5)
     
     ax.text(0.9, 0.9, r"Average: {:.1f} $\pm$ {:.1f}".format(ave_multi, np.sqrt(var_multi)), 

@@ -17,6 +17,8 @@ from astropy.coordinates import SkyCoord
 from shapely.ops import unary_union, polygonize
 from shapely.geometry import LineString, Point
 
+import copy 
+
 class Telescope:
     """
     Class containing information on a telescope
@@ -35,11 +37,10 @@ class Telescope:
         camera radius
     """
 
-    _id = 0
-    def __init__(self, x, y, z, focal, camera_radius):
+    
+    def __init__(self, _id, x, y, z, focal, camera_radius):
         
-        Telescope._id += 1
-        self.id = Telescope._id
+        self.id = _id
         self.x = x.to(u.m)
         self.y = y.to(u.m)
         self.z = z.to(u.m)
@@ -229,7 +230,7 @@ class Array:
         if frame == None:
             self._frame = CTA_Info(verbose=False, **kwargs)
         else:
-            self._frame = frame
+            self._frame = copy.copy(frame)
             if pointing2src and (self.frame.source is not None):
                 self.set_pointing_coord(ra = self.frame.source.icrs.ra.deg, 
                                         dec = self.frame.source.icrs.dec.deg)
@@ -247,7 +248,9 @@ class Array:
         """
         
         table = []
+
         for tel in self.telescopes:
+
             table.append(tel.table)
         
         units = 'rad'
@@ -414,7 +417,16 @@ class Array:
             self.__convert_units__(toDeg=True)
         
         coord = self.get_pointing_coord(icrs=False)
-        polygons = [Point(az, alt).buffer(r) for az, alt, r in zip(coord.az.degree, coord.alt.degree, self.table["radius"])]
+        
+        if max(self.table["az"])-min(self.table["az"]) > 180:
+            polygons = []
+            for az, alt, r in zip(coord.az.degree, coord.alt.degree, self.table["radius"]):
+                if az < 180:
+                    polygons.append(Point(az, alt).buffer(r))
+                else:
+                    polygons.append(Point(az-360, alt).buffer(r))
+        else:
+            polygons = [Point(az, alt).buffer(r) for az, alt, r in zip(coord.az.degree, coord.alt.degree, self.table["radius"])]
 
         union = unary_union([LineString(list(pol.exterior.coords)) for pol in polygons])
         geoms = [geom for geom in polygonize(union)]

@@ -31,7 +31,7 @@ def LoadConfig(file, tel_id=-1, radius="degrees", frame=None, **kwargs):
     with open(file, "r") as f:
         
         tels = []
-        for line in f.readlines():
+        for i, line in enumerate(f.readlines()):
             line = np.asarray(line.split()).astype("float")
 
             if (radius!="meters"):
@@ -39,7 +39,7 @@ def LoadConfig(file, tel_id=-1, radius="degrees", frame=None, **kwargs):
             
             coord = [x*u.m for x in line]
 
-            tel = Telescope(coord[0],coord[1],coord[2],coord[3],coord[4])
+            tel = Telescope(i+1, coord[0],coord[1],coord[2],coord[3],coord[4])
             tels.append(tel)
 
     if tel_id == -1:

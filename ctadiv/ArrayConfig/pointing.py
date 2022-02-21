@@ -4,8 +4,8 @@ We use the same reference frame as simtel_array:
 X is pointing North
 Y is pointing East
 Z is pointing upward
-Az is taken clock-wise from X (towards Y) and between -180 and 180 degrees
-Alt is taken from ground (towards Z) and between -90 and 90 degrees
+Az is taken clock-wise from X (towards Y) and between 0 and 180 degrees
+Alt is taken from ground (towards Z) and between 0 and 90 degrees
 """
 
 import numpy as np
