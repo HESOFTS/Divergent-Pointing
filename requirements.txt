@@ -1,0 +1,8 @@
+astroplan==0.8
+astropy==4.3.1
+descartes==1.1.0
+ipython==8.0.1
+ipywidgets==7.6.3
+matplotlib==3.3.3
+numpy==1.20.0
+Shapely==1.8.0
