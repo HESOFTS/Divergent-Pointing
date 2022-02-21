@@ -200,9 +200,8 @@ class Telescope:
         array
             [p_x, p_y, p_z]
         """
-        return np.array([np.cos(self.alt.to(u.rad))*np.cos(self.az.to(u.rad)),
-                         -np.cos(self.alt.to(u.rad))*np.sin(self.az.to(u.rad)),
-                         np.sin(self.alt.to(u.rad))])
+        
+        return pointing.alt_az_to_vector(self.alt, self.az)
 
     
 class Array:
