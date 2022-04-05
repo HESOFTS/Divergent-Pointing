@@ -1,5 +1,6 @@
 from ..const import CONFIG_DIR
-from .telescope import Telescope, Array
+from .telescope import Telescope
+from .array import Array
 import astropy.units as u
 import numpy as np
 
