@@ -643,7 +643,7 @@ class Array:
         """
         return visual.multiplicity_plot(self, fig=fig)
 
-    def export_cfg(self, filename=None, verbose=False):
+    def export_cfg(self, filename=None, outdir="./output/", verbose=False):
         """
         Export cfg file.
 
@@ -661,7 +661,7 @@ class Array:
                 str(self.pointing["az"].value).replace(".", "_"), 
                 str(self.pointing["alt"].value).replace(".", "_"))
         
-        with open(filename, 'w') as f:
+        with open(outdir+filename, 'w') as f:
             f.write('#ifndef TELESCOPE\n')
             f.write('#  define TELESCOPE 0\n')
             f.write('#endif\n')
@@ -686,7 +686,7 @@ class Array:
             f.write('array_trigger = array_trigger_ultra6_diver-test.dat\n')
         
         if verbose:
-            with open(filename, 'r') as f:
+            with open(outdir+filename, 'r') as f:
                 for line in f.readlines():
                     print(line)
 
